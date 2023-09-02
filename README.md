@@ -30,7 +30,7 @@ Your primary objective is to develop an algorithm that enables the robot arm to 
    - Familiarize yourself with the Pybullet environment provided in the `environment.py` file. This file contains the basic setup for the robot arm and the cube.
 
 2. **Algorithm Development**: 
-   - Develop your algorithm in the `algorithm.py` file. You can use any machine learning or control algorithm of your choice.
+   - Develop your algorithm in the `environment.py` file. You can use any machine learning or control algorithm of your choice.
 
 3. **Evaluation**: 
    - Your solution will be evaluated based on:

@@ -20,7 +20,7 @@ Your primary objective is to develop an algorithm that enables the robot arm to 
    ```bash
    git clone [URL of this repo]
    
-2. **Install the required packages:**:
+2. **Install the required packages:**
    ```bash
    pip install pybullet
    

@@ -199,16 +199,16 @@ class Arm_env():
                                                                              renderer=p.ER_BULLET_HARDWARE_OPENGL)
             far_range = self.camera_parameters['far']
             near_range = self.camera_parameters['near']
-            depth_data = far_range * near_range / (far_range - (far_range - near_range) * image_depth)
-            top_height = 0.4 - depth_data
+            # depth_data = far_range * near_range / (far_range - (far_range - near_range) * image_depth)
+            # top_height = 0.4 - depth_data
             my_im = image[:, :, :3]
             temp = np.copy(my_im[:, :, 0])  # change rgb image to bgr for opencv to save
             my_im[:, :, 0] = my_im[:, :, 2]
             my_im[:, :, 2] = temp
             img = np.copy(my_im)
-            return img, top_height
+            return img, #top_height
 
-        img, _ = get_images()
+        img = get_images()
         # cv2.namedWindow('knolling_environment', 0)
         # cv2.resizeWindow('knolling_environment', 1280, 960)
         # cv2.imshow('knolling_environment', img)

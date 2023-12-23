@@ -4,13 +4,19 @@ import pybullet_data as pd
 import os
 import numpy as np
 import random
-
 import time
+import gym
+import cv2
+import matplotlib.pyplot as plt
+from stable_baselines3 import PPO
+from stable_baselines3.common.env_checker import check_env
 
 
-class Arm_env():
+
+class Arm_env(gym.Env):
 
     def __init__(self, para_dict, knolling_para=None):
+        super(Arm_env, self).__init__()
 
         self.para_dict = para_dict
         self.knolling_para = knolling_para
@@ -49,63 +55,50 @@ class Arm_env():
         else:
             p.connect(p.DIRECT)
 
-        self.camera_parameters = {
-            'width': 640.,
-            'height': 480,
-            'fov': 42,
-            'near': 0.1,
-            'far': 100.,
-            'camera_up_vector':
-                [1, 0, 0],
-            'light_direction': [
-                0.5, 0, 1
-            ],  # the direction is from the light source position to the origin of the world frame.
-        }
         self.view_matrix = p.computeViewMatrixFromYawPitchRoll(cameraTargetPosition=[0.150, 0, 0], #0.175
                                                                distance=0.4,
                                                                yaw=90,
                                                                pitch = -90,
                                                                roll=0,
                                                                upAxisIndex=2)
-        self.projection_matrix = p.computeProjectionMatrixFOV(fov=self.camera_parameters['fov'],
-                                                              aspect=self.camera_parameters['width'] /
-                                                                     self.camera_parameters['height'],
-                                                              nearVal=self.camera_parameters['near'],
-                                                              farVal=self.camera_parameters['far'])
+        self.projection_matrix = p.computeProjectionMatrixFOV(fov=42,
+                                                              aspect=640/480,
+                                                              nearVal=0.1,
+                                                              farVal=100)
         p.resetDebugVisualizerCamera(cameraDistance=0.5,
                                      cameraYaw=45,
                                      cameraPitch=-45,
                                      cameraTargetPosition=[0.1, 0, 0])
         p.setAdditionalSearchPath(pd.getDataPath())
         p.setTimeStep(1. / 120.)
+        self.reset()
 
-    def create_scene(self):
-
-        if random.uniform(0, 1) > 0.5:
+    def create_scene(self,random_lightness=True,use_texture=True):
+        self.baseid = p.loadURDF(self.urdf_path + "plane_zzz.urdf", useMaximalCoordinates=True)
+        if random_lightness:
             p.configureDebugVisualizer(lightPosition=[np.random.randint(1, 2), np.random.uniform(0, 1.5), 2],
                                        shadowMapResolution=8192, shadowMapIntensity=np.random.randint(0, 1) / 10)
-        else:
-            p.configureDebugVisualizer(lightPosition=[np.random.randint(1, 2), np.random.uniform(-1.5, 0), 2],
-                                       shadowMapResolution=8192, shadowMapIntensity=np.random.randint(0, 1) / 10)
-        self.baseid = p.loadURDF(self.urdf_path + "plane_zzz.urdf", useMaximalCoordinates=True)
+        p.addUserDebugLine(
+            lineFromXYZ=[self.x_low_obs - self.table_boundary, self.y_low_obs - self.table_boundary, self.z_low_obs+0.005],
+            lineToXYZ=[self.x_high_obs + self.table_boundary, self.y_low_obs - self.table_boundary, self.z_low_obs+0.005],
+            lineWidth=10)
+        p.addUserDebugLine(
+            lineFromXYZ=[self.x_low_obs - self.table_boundary, self.y_low_obs - self.table_boundary, self.z_low_obs+0.005],
+            lineToXYZ=[self.x_low_obs - self.table_boundary, self.y_high_obs + self.table_boundary, self.z_low_obs+0.005],
+            lineWidth=10)
+        p.addUserDebugLine(
+            lineFromXYZ=[self.x_high_obs + self.table_boundary, self.y_high_obs + self.table_boundary, self.z_low_obs+0.005],
+            lineToXYZ=[self.x_high_obs + self.table_boundary, self.y_low_obs - self.table_boundary, self.z_low_obs+0.005],
+            lineWidth=10)
+        p.addUserDebugLine(
+            lineFromXYZ=[self.x_high_obs + self.table_boundary, self.y_high_obs + self.table_boundary, self.z_low_obs+0.005],
+            lineToXYZ=[self.x_low_obs - self.table_boundary, self.y_high_obs + self.table_boundary, self.z_low_obs+0.005],
+            lineWidth=10)
 
-        p.addUserDebugLine(
-            lineFromXYZ=[self.x_low_obs - self.table_boundary, self.y_low_obs - self.table_boundary, self.z_low_obs],
-            lineToXYZ=[self.x_high_obs + self.table_boundary, self.y_low_obs - self.table_boundary, self.z_low_obs])
-        p.addUserDebugLine(
-            lineFromXYZ=[self.x_low_obs - self.table_boundary, self.y_low_obs - self.table_boundary, self.z_low_obs],
-            lineToXYZ=[self.x_low_obs - self.table_boundary, self.y_high_obs + self.table_boundary, self.z_low_obs])
-        p.addUserDebugLine(
-            lineFromXYZ=[self.x_high_obs + self.table_boundary, self.y_high_obs + self.table_boundary, self.z_low_obs],
-            lineToXYZ=[self.x_high_obs + self.table_boundary, self.y_low_obs - self.table_boundary, self.z_low_obs])
-        p.addUserDebugLine(
-            lineFromXYZ=[self.x_high_obs + self.table_boundary, self.y_high_obs + self.table_boundary, self.z_low_obs],
-            lineToXYZ=[self.x_low_obs - self.table_boundary, self.y_high_obs + self.table_boundary, self.z_low_obs])
-
-        background = np.random.randint(1, 5)
-        textureId = p.loadTexture(self.urdf_path + f"img_{background}.png")
-        p.changeVisualShape(self.baseid, -1, textureUniqueId=textureId, specularColor=[0, 0, 0])
-
+        if use_texture:
+            background = np.random.randint(1, 5)
+            textureId = p.loadTexture(self.urdf_path + f"img_{background}.png")
+            p.changeVisualShape(self.baseid, -1, textureUniqueId=textureId, specularColor=[0, 0, 0])
         p.setGravity(0, 0, -10)
 
     def to_home(self):
@@ -117,12 +110,10 @@ class Arm_env():
         for motor_index in range(5):
             p.setJointMotorControl2(self.arm_id, motor_index, p.POSITION_CONTROL,
                                     targetPosition=ik_angles0[motor_index], maxVelocity=20)
-        for _ in range(int(30)):
-            # time.sleep(1/480)
+        for _ in range(30):
             p.stepSimulation()
 
     def create_arm(self):
-
         self.arm_id = p.loadURDF(os.path.join(self.urdf_path, "robot_arm928/robot_arm1_backup.urdf"),
                                  basePosition=[-0.08, 0, 0.02], useFixedBase=True,
                                  flags=p.URDF_USE_SELF_COLLISION or p.URDF_USE_SELF_COLLISION_INCLUDE_PARENT)
@@ -134,6 +125,8 @@ class Arm_env():
                          contactDamping=self.para_dict['gripper_contact_damping'],
                          contactStiffness=self.para_dict['gripper_contact_stiffness'])
         # self.to_home()
+        home_loc = [para_dict['reset_pos'],para_dict['reset_ori']]
+        self.act(target_location=home_loc)
 
     def get_data_virtual(self):
 
@@ -179,54 +172,66 @@ class Arm_env():
                          contactDamping=self.para_dict['base_contact_damping'],
                          contactStiffness=self.para_dict['base_contact_stiffness'])
 
+
+
     def reset(self, epoch=None, manipulator_after=None, lwh_after=None):
 
-        p.resetSimulation()
         self.create_scene()
         self.create_arm()
         self.create_objects(manipulator_after, lwh_after)
-        while True:
-            self.get_obs()
+
+    def act(self, target_location):
+
+        ik_angles0 = p.calculateInverseKinematics(self.arm_id, 9, targetPosition=target_location[0],
+                                                  maxNumIterations=200,
+                                                  targetOrientation=p.getQuaternionFromEuler(
+                                                      target_location[1]))
+        for motor_index in range(5):
+            p.setJointMotorControl2(self.arm_id, motor_index, p.POSITION_CONTROL,
+                                    targetPosition=ik_angles0[motor_index], maxVelocity=20)
+
+        for _ in range(30):
             p.stepSimulation()
+
             time.sleep(1 / 480)
 
-    def get_obs(self):
-        def get_images():
-            (width, length, image, image_depth, seg_mask) = p.getCameraImage(width=640,
-                                                                             height=480,
-                                                                             viewMatrix=self.view_matrix,
-                                                                             projectionMatrix=self.projection_matrix,
-                                                                             renderer=p.ER_BULLET_HARDWARE_OPENGL)
-            far_range = self.camera_parameters['far']
-            near_range = self.camera_parameters['near']
-            # depth_data = far_range * near_range / (far_range - (far_range - near_range) * image_depth)
-            # top_height = 0.4 - depth_data
-            my_im = image[:, :, :3]
-            temp = np.copy(my_im[:, :, 0])  # change rgb image to bgr for opencv to save
-            my_im[:, :, 0] = my_im[:, :, 2]
-            my_im[:, :, 2] = temp
-            img = np.copy(my_im)
-            return img, #top_height
+    def step(self,a):
+        self.act(a)
+        r = 1
+        Done = False
+        obs_list=self.get_obs()
+        return obs_list, r, Done, {}
 
-        img = get_images()
-        # cv2.namedWindow('knolling_environment', 0)
-        # cv2.resizeWindow('knolling_environment', 1280, 960)
-        # cv2.imshow('knolling_environment', img)
-        # cv2.waitKey(0)
-        # cv2.destroyAllWindows()
+
+    def get_obs(self):
+        obs_list = []
+        for item in self.boxes_index:
+            loc = p.getBasePositionAndOrientation(item)
+            obs_list.append(loc)
+        return obs_list
+
+        # (width, length, image, image_depth, seg_mask) = p.getCameraImage(width=640,
+        #                                                                  height=480,
+        #                                                                  viewMatrix=self.view_matrix,
+        #                                                                  projectionMatrix=self.projection_matrix,
+        #                                                                  renderer=p.ER_BULLET_HARDWARE_OPENGL)
+        # img = np.asarray(image).reshape((480,640,4))[...,:3]/255
+        # # img = np.transpose(img,(1,2,0))
+        #
         # img_path = self.para_dict['dataset_path'] + 'image.png'
-        # cv2.imwrite(img_path, img)
+        # plt.imsave(img_path, img)
+
 
 if __name__ == '__main__':
 
-    # np.random.seed(183)
-    # random.seed(183)
+    np.random.seed(0)
+    random.seed(0)
 
     para_dict = {'reset_pos': np.array([0, 0, 0.12]), 'reset_ori': np.array([0, np.pi / 2, 0]),
                  'save_img_flag': True,
                  'init_pos_range': [[0.13, 0.17], [-0.03, 0.03], [0.01, 0.02]], 'init_offset_range': [[-0.05, 0.05], [-0.1, 0.1]],
                  'init_ori_range': [[-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4]],
-                 'boxes_num': np.random.randint(1, 2),
+                 'boxes_num': np.random.randint(4, 5),
                  'is_render': True,
                  'box_range': [[0.016, 0.048], [0.016], [0.01, 0.02]],
                  'box_mass': 0.1,
@@ -240,4 +245,8 @@ if __name__ == '__main__':
 
     os.makedirs(para_dict['dataset_path'], exist_ok=True)
     env = Arm_env(para_dict=para_dict)
-    env.reset()
+
+    while True:
+        loc = [[0.15,0,0.015],[0,np.pi/2,0]]
+        obs = env.step(loc)
+

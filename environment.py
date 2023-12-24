@@ -5,12 +5,12 @@ import os
 import numpy as np
 import random
 import time
-import gym
+import gymnasium as gym
+from gymnasium import spaces
 import cv2
 import matplotlib.pyplot as plt
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_checker import check_env
-
 
 
 class Arm_env(gym.Env):
@@ -71,6 +71,33 @@ class Arm_env(gym.Env):
                                      cameraTargetPosition=[0.1, 0, 0])
         p.setAdditionalSearchPath(pd.getDataPath())
         p.setTimeStep(1. / 120.)
+
+
+        self.ee_manual_id = p.addUserDebugParameter("ee_gripper:", 0, 0.035, 0.035)
+        self.x_manual_id = p.addUserDebugParameter("ee_x:", self.x_low_obs, self.x_high_obs, para_dict['reset_pos'][0])
+        self.y_manual_id = p.addUserDebugParameter("ee_y:", self.y_low_obs, self.y_high_obs, para_dict['reset_pos'][1])
+        self.z_manual_id = p.addUserDebugParameter("ee_z:", self.z_low_obs, self.z_high_obs, para_dict['reset_pos'][2])
+        self.yaw_manual_id = p.addUserDebugParameter("ee_yaw:", -np.pi/2, np.pi/2, para_dict['reset_ori'][2])
+
+        # Define action space (x, y, z, yaw)
+
+        # self.action_space = spaces.Box(low=np.array([self.init_pos_range[0][0], self.init_pos_range[1][0], 0.00, -np.pi/2]),
+        #                                high=np.array([self.init_pos_range[0][1],self.init_pos_range[1][1], 0.005, np.pi/2]),
+        #                                dtype=np.float32)
+
+        self.action_space = spaces.Box(low=np.array([self.x_low_obs, self.y_low_obs,  0.005, -np.pi/2]),
+                                       high=np.array([self.x_high_obs,self.y_high_obs, 0.005, np.pi/2]),
+                                       dtype=np.float32)
+
+        # Define observation space (assuming a fixed number of objects for simplicity)
+        num_objects = para_dict['boxes_num']
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf,
+                                            shape=(num_objects* 7+4,),  # Position (3) + Orientation (4) for each object
+                                            dtype=np.float32)
+        self.boxes_index =[]
+        self.max_steps = 6
+        self.create_scene()
+        self.create_arm()
         self.reset()
 
     def create_scene(self,random_lightness=True,use_texture=True):
@@ -101,17 +128,6 @@ class Arm_env(gym.Env):
             p.changeVisualShape(self.baseid, -1, textureUniqueId=textureId, specularColor=[0, 0, 0])
         p.setGravity(0, 0, -10)
 
-    def to_home(self):
-
-        ik_angles0 = p.calculateInverseKinematics(self.arm_id, 9, targetPosition=self.para_dict['reset_pos'],
-                                                  maxNumIterations=200,
-                                                  targetOrientation=p.getQuaternionFromEuler(
-                                                      self.para_dict['reset_ori']))
-        for motor_index in range(5):
-            p.setJointMotorControl2(self.arm_id, motor_index, p.POSITION_CONTROL,
-                                    targetPosition=ik_angles0[motor_index], maxVelocity=20)
-        for _ in range(30):
-            p.stepSimulation()
 
     def create_arm(self):
         self.arm_id = p.loadURDF(os.path.join(self.urdf_path, "robot_arm928/robot_arm1_backup.urdf"),
@@ -124,9 +140,6 @@ class Arm_env(gym.Env):
         p.changeDynamics(self.arm_id, 8, lateralFriction=self.para_dict['gripper_lateral_friction'],
                          contactDamping=self.para_dict['gripper_contact_damping'],
                          contactStiffness=self.para_dict['gripper_contact_stiffness'])
-        # self.to_home()
-        home_loc = [para_dict['reset_pos'],para_dict['reset_ori']]
-        self.act(target_location=home_loc)
 
     def get_data_virtual(self):
 
@@ -136,51 +149,84 @@ class Arm_env(gym.Env):
         lwh_list = np.concatenate((length_range, width_range, height_range), axis=1)
         return lwh_list
 
-    def create_objects(self, manipulator_after, lwh_after):
+    def create_objects(self,offline=True):
 
-        self.lwh_list = self.get_data_virtual()
-        self.num_boxes = np.copy(len(self.lwh_list))
-        rdm_ori_roll  = np.random.uniform(self.init_ori_range[0][0], self.init_ori_range[0][1], size=(self.num_boxes, 1))
-        rdm_ori_pitch = np.random.uniform(self.init_ori_range[1][0], self.init_ori_range[1][1], size=(self.num_boxes, 1))
-        rdm_ori_yaw   = np.random.uniform(self.init_ori_range[2][0], self.init_ori_range[2][1], size=(self.num_boxes, 1))
-        rdm_ori = np.concatenate((rdm_ori_roll, rdm_ori_pitch, rdm_ori_yaw), axis=1)
-        rdm_pos_x = np.random.uniform(self.init_pos_range[0][0], self.init_pos_range[0][1], size=(self.num_boxes, 1))
-        rdm_pos_y = np.random.uniform(self.init_pos_range[1][0], self.init_pos_range[1][1], size=(self.num_boxes, 1))
-        rdm_pos_z = np.random.uniform(self.init_pos_range[2][0], self.init_pos_range[2][1], size=(self.num_boxes, 1))
-        x_offset = np.random.uniform(self.init_offset_range[0][0], self.init_offset_range[0][1])
-        y_offset = np.random.uniform(self.init_offset_range[1][0], self.init_offset_range[1][1])
-        print('this is offset: %.04f, %.04f' % (x_offset, y_offset))
-        rdm_pos = np.concatenate((rdm_pos_x + x_offset, rdm_pos_y + y_offset, rdm_pos_z), axis=1)
+        if not offline:
+            self.lwh_list = self.get_data_virtual()
+            self.num_boxes = np.copy(len(self.lwh_list))
+            rdm_ori_roll  = np.random.uniform(self.init_ori_range[0][0], self.init_ori_range[0][1], size=(self.num_boxes, 1))
+            rdm_ori_pitch = np.random.uniform(self.init_ori_range[1][0], self.init_ori_range[1][1], size=(self.num_boxes, 1))
+            rdm_ori_yaw   = np.random.uniform(self.init_ori_range[2][0], self.init_ori_range[2][1], size=(self.num_boxes, 1))
+            objs_ori = np.concatenate((rdm_ori_roll, rdm_ori_pitch, rdm_ori_yaw), axis=1)
 
-        self.num_boxes = np.copy(len(self.lwh_list))
-        self.boxes_index = []
-        for i in range(self.num_boxes):
-            obj_name = f'object_{i}'
-            create_box(obj_name, rdm_pos[i], p.getQuaternionFromEuler(rdm_ori[i]), size=self.lwh_list[i])
-            self.boxes_index.append(int(i + 2))
-            r = np.random.uniform(0, 0.9)
-            g = np.random.uniform(0, 0.9)
-            b = np.random.uniform(0, 0.9)
-            p.changeVisualShape(self.boxes_index[i], -1, rgbaColor=(r, g, b, 1))
+            rdm_pos_x = np.random.uniform(self.init_pos_range[0][0], self.init_pos_range[0][1], size=(self.num_boxes, 1))
+            rdm_pos_y = np.random.uniform(self.init_pos_range[1][0], self.init_pos_range[1][1], size=(self.num_boxes, 1))
+            rdm_pos_z = np.random.uniform(self.init_pos_range[2][0], self.init_pos_range[2][1], size=(self.num_boxes, 1))
+            x_offset = np.random.uniform(self.init_offset_range[0][0], self.init_offset_range[0][1])
+            y_offset = np.random.uniform(self.init_offset_range[1][0], self.init_offset_range[1][1])
+            objs_pos = np.concatenate((rdm_pos_x + x_offset, rdm_pos_y + y_offset, rdm_pos_z), axis=1)
 
-        for _ in range(int(100)):
-            p.stepSimulation()
-            if self.is_render == True:
-                time.sleep(1/96)
+            for i in range(self.num_boxes):
+                obj_name = f'object_{i}'
+                create_box(obj_name, objs_pos[i], p.getQuaternionFromEuler(objs_ori[i]), size=self.lwh_list[i])
+                self.boxes_index.append(int(i + 2))
+            for _ in range(100):
+                p.stepSimulation()
+            pos_ori_data = self.get_obs()[:-4].reshape(self.num_boxes,-1)
+            np.savetxt('urdf/objs_location.csv', np.hstack([pos_ori_data[:,:7], self.lwh_list]))
+
+
+        else:
+            obj_info = np.loadtxt('urdf/objs_location.csv')
+            objs_pos, objs_ori, self.lwh_list = obj_info[:,:3],obj_info[:,3:7],obj_info[:,7:10]
+            for i in range(self.num_boxes):
+                obj_name = f'object_{i}'
+                create_box(obj_name, objs_pos[i], objs_ori[i], size=self.lwh_list[i])
+                self.boxes_index.append(int(i + 2))
+
 
         p.changeDynamics(self.baseid, -1, lateralFriction=self.para_dict['base_lateral_friction'],
                          contactDamping=self.para_dict['base_contact_damping'],
                          contactStiffness=self.para_dict['base_contact_stiffness'])
 
 
+    def reset(self, seed=None, return_observation=True):
 
-    def reset(self, epoch=None, manipulator_after=None, lwh_after=None):
 
-        self.create_scene()
-        self.create_arm()
-        self.create_objects(manipulator_after, lwh_after)
+        home_loc = np.concatenate([self.para_dict['reset_pos'],self.para_dict['reset_ori'][2:]])
+        self.act(a=home_loc)
+        self.last_action = self.action
 
-    def act(self, target_location):
+        if len(self.boxes_index) == 0:
+            self.create_objects(offline=True)
+        else:
+            for k in self.boxes_index: p.removeBody(k)
+            self.boxes_index = []
+            self.create_objects(offline=True)
+
+        for i in range(30):
+
+            # traget_end = p.readUserDebugParameter(self.ee_manual_id)
+            traget_end = 0.035
+            p.setJointMotorControl2(self.arm_id, 7, p.POSITION_CONTROL,
+                                    targetPosition=traget_end, force=self.para_dict['gripper_force'])
+            p.setJointMotorControl2(self.arm_id, 8, p.POSITION_CONTROL,
+                                    targetPosition=traget_end, force=self.para_dict['gripper_force'])
+            p.stepSimulation()
+
+        self.current_step = 0
+
+        if seed is not None:
+            np.random.seed(seed)
+
+
+        initial_observation = self.get_obs()
+        return initial_observation, {}
+
+
+    def act(self, a):
+        self.action = a
+        target_location = [a[:3],[0,np.pi/2,a[3]]]
 
         ik_angles0 = p.calculateInverseKinematics(self.arm_id, 9, targetPosition=target_location[0],
                                                   maxNumIterations=200,
@@ -190,24 +236,63 @@ class Arm_env(gym.Env):
             p.setJointMotorControl2(self.arm_id, motor_index, p.POSITION_CONTROL,
                                     targetPosition=ik_angles0[motor_index], maxVelocity=20)
 
-        for _ in range(30):
+        for _ in range(80):
             p.stepSimulation()
+            if self.is_render:
+                time.sleep(1 / 480)
 
-            time.sleep(1 / 480)
+    def get_r(self,obs_list):
+
+        obs_list = obs_list[:-4].reshape(self.num_boxes,-1) # last 4 data is the action
+        # print('obs_list:',obs_list)
+        dist = []
+        # calculate the dist of each two objects
+        for j in range(len(obs_list)-1):
+            for i in range(j+1, len(obs_list)):
+                dist.append(np.sqrt(np.sum((obs_list[j][:2]-obs_list[i][:2])**2)))
+
+        dist_mean = np.mean(dist)
+        if dist_mean>0.05:
+            reward = 0.1
+        else:
+            reward = dist
+
+        # energy penalty:
+        energy = np.sum((self.action-self.last_action)**2) * 0.01
+        self.last_action = self.action
+        reward -= energy
+
+        # out-of-boundary penalty:
+        if (self.x_low_obs<obs_list[:,0]).all() and \
+                (self.x_high_obs > obs_list[:, 0]).all() and \
+            (self.y_low_obs<obs_list[:,1]).all() and \
+                (self.y_high_obs >obs_list[:,1]).all():
+
+            return reward
+
+        else: return -100
 
     def step(self,a):
         self.act(a)
-        r = 1
-        Done = False
-        obs_list=self.get_obs()
-        return obs_list, r, Done, {}
+        obs_list = self.get_obs()
+        r = self.get_r(obs_list)
+
+        self.current_step +=1
+        # Check if maximum steps have been reached
+        Done = self.current_step >= self.max_steps
+        truncated = False
+
+        return obs_list, r, Done, truncated, {}
 
 
     def get_obs(self):
         obs_list = []
         for item in self.boxes_index:
             loc = p.getBasePositionAndOrientation(item)
+            loc = np.concatenate(loc)
             obs_list.append(loc)
+        obs_list = np.asarray(obs_list,dtype=np.float32).reshape(-1)
+        obs_list = np.asarray(np.concatenate((obs_list,self.action)),dtype=np.float32)
         return obs_list
 
         # (width, length, image, image_depth, seg_mask) = p.getCameraImage(width=640,
@@ -227,11 +312,11 @@ if __name__ == '__main__':
     np.random.seed(0)
     random.seed(0)
 
-    para_dict = {'reset_pos': np.array([0, 0, 0.12]), 'reset_ori': np.array([0, np.pi / 2, 0]),
+    para_dict = {'reset_pos': np.array([0, 0, 0.005]), 'reset_ori': np.array([0, np.pi / 2, 0]),
                  'save_img_flag': True,
                  'init_pos_range': [[0.13, 0.17], [-0.03, 0.03], [0.01, 0.02]], 'init_offset_range': [[-0.05, 0.05], [-0.1, 0.1]],
                  'init_ori_range': [[-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4]],
-                 'boxes_num': np.random.randint(4, 5),
+                 'boxes_num': np.random.randint(2,3),
                  'is_render': True,
                  'box_range': [[0.016, 0.048], [0.016], [0.01, 0.02]],
                  'box_mass': 0.1,
@@ -246,7 +331,20 @@ if __name__ == '__main__':
     os.makedirs(para_dict['dataset_path'], exist_ok=True)
     env = Arm_env(para_dict=para_dict)
 
-    while True:
-        loc = [[0.15,0,0.015],[0,np.pi/2,0]]
-        obs = env.step(loc)
+
+    for i in range(10000):
+        # loc = [[0.15,0,0.015],[0,np.pi/2,0]]
+        x_ml = p.readUserDebugParameter(env.x_manual_id)
+        y_ml = p.readUserDebugParameter(env.y_manual_id)
+        z_ml = p.readUserDebugParameter(env.z_manual_id)
+        yaw_ml = p.readUserDebugParameter(env.yaw_manual_id)
+
+        # random sample
+        random_sample = env.action_space.sample()
+
+        obs,r,done,_,_ = env.step(random_sample)
+        print(r)
+
+        if done:
+            env.reset()
 

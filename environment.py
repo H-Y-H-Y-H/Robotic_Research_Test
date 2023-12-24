@@ -85,8 +85,8 @@ class Arm_env(gym.Env):
         #                                high=np.array([self.init_pos_range[0][1],self.init_pos_range[1][1], 0.005, np.pi/2]),
         #                                dtype=np.float32)
 
-        self.action_space = spaces.Box(low=np.array([self.x_low_obs, self.y_low_obs,  0.005, -np.pi/2]),
-                                       high=np.array([self.x_high_obs,self.y_high_obs, 0.005, np.pi/2]),
+        self.action_space = spaces.Box(low=np.array([-1, -1,  0.005, -np.pi/2]),
+                                       high=np.array([1,1, 0.005, np.pi/2]),
                                        dtype=np.float32)
 
         # Define observation space (assuming a fixed number of objects for simplicity)
@@ -225,6 +225,9 @@ class Arm_env(gym.Env):
 
 
     def act(self, a):
+
+        a[0] = (a[0] +1 )/2 * (self.x_high_obs - self.x_low_obs)+self.x_low_obs
+        a[1] = (a[1] +1 )/2 * (self.y_high_obs - self.y_low_obs)+self.y_low_obs
         self.action = a
         target_location = [a[:3],[0,np.pi/2,a[3]]]
 
@@ -238,8 +241,8 @@ class Arm_env(gym.Env):
 
         for _ in range(80):
             p.stepSimulation()
-            if self.is_render:
-                time.sleep(1 / 480)
+            # if self.is_render:
+            #     time.sleep(1 / 480)
 
     def get_r(self,obs_list):
 
@@ -255,7 +258,7 @@ class Arm_env(gym.Env):
         if dist_mean>0.05:
             reward = 0.1
         else:
-            reward = dist
+            reward = dist_mean
 
         # energy penalty:
         energy = np.sum((self.action-self.last_action)**2) * 0.01
@@ -268,20 +271,32 @@ class Arm_env(gym.Env):
             (self.y_low_obs<obs_list[:,1]).all() and \
                 (self.y_high_obs >obs_list[:,1]).all():
 
-            return reward
+            return reward, False
 
-        else: return -100
+        else: return -100, True
 
     def step(self,a):
         self.act(a)
         obs_list = self.get_obs()
-        r = self.get_r(obs_list)
+        r,Done = self.get_r(obs_list)
+
+        # robot arm becomes crazy
+        bar_pos = np.asarray(p.getLinkState(self.arm_id, 6)[0])
+        if bar_pos[0] < 0:
+            p.resetSimulation()
+            self.boxes_index = []
+            self.create_scene()
+            self.create_arm()
+            r = -100
+            Done = True
+            # print(a)
 
         self.current_step +=1
         # Check if maximum steps have been reached
-        Done = self.current_step >= self.max_steps
-        truncated = False
+        if self.current_step >= self.max_steps:
+            Done = True
 
+        truncated = False
         return obs_list, r, Done, truncated, {}
 
 
@@ -312,7 +327,7 @@ if __name__ == '__main__':
     np.random.seed(0)
     random.seed(0)
 
-    para_dict = {'reset_pos': np.array([0, 0, 0.005]), 'reset_ori': np.array([0, np.pi / 2, 0]),
+    para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, np.pi / 2, 0]),
                  'save_img_flag': True,
                  'init_pos_range': [[0.13, 0.17], [-0.03, 0.03], [0.01, 0.02]], 'init_offset_range': [[-0.05, 0.05], [-0.1, 0.1]],
                  'init_ori_range': [[-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4]],

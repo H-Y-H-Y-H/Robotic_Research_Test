@@ -81,10 +81,6 @@ class Arm_env(gym.Env):
 
         # Define action space (x, y, z, yaw)
 
-        # self.action_space = spaces.Box(low=np.array([self.init_pos_range[0][0], self.init_pos_range[1][0], 0.00, -np.pi/2]),
-        #                                high=np.array([self.init_pos_range[0][1],self.init_pos_range[1][1], 0.005, np.pi/2]),
-        #                                dtype=np.float32)
-
         self.action_space = spaces.Box(low=np.array([-1, -1,  0.005, -np.pi/2]),
                                        high=np.array([1,1, 0.005, np.pi/2]),
                                        dtype=np.float32)
@@ -151,7 +147,7 @@ class Arm_env(gym.Env):
 
     def create_objects(self,offline=True):
 
-        if not offline:
+        if not offline: # random initialize the env for robot.
             self.lwh_list = self.get_data_virtual()
             self.num_boxes = np.copy(len(self.lwh_list))
             rdm_ori_roll  = np.random.uniform(self.init_ori_range[0][0], self.init_ori_range[0][1], size=(self.num_boxes, 1))
@@ -260,10 +256,10 @@ class Arm_env(gym.Env):
         else:
             reward = dist_mean
 
-        # # energy penalty:
-        # energy = np.sum((self.action-self.last_action)**2) * 0.01
-        # self.last_action = self.action
-        # reward -= energy
+        # energy penalty:
+        energy = np.sum((self.action-self.last_action)**2) * 0.01
+        self.last_action = self.action
+        reward -= energy
 
         # out-of-boundary penalty:
         if (self.x_low_obs<obs_list[:,0]).all() and \

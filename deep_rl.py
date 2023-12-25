@@ -92,7 +92,7 @@ else:
     env = Arm_env(para_dict=para_dict)
 
     # Load the trained model
-    model = PPO.load("ppo_model_last.zip")
+    model = PPO.load("ppo_model_best(energy_pen).zip")
 
     # Evaluate the model
     eval_model()

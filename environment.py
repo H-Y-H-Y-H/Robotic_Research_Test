@@ -74,8 +74,8 @@ class Arm_env(gym.Env):
 
 
         self.ee_manual_id = p.addUserDebugParameter("ee_gripper:", 0, 0.035, 0.035)
-        self.x_manual_id = p.addUserDebugParameter("ee_x:", self.x_low_obs, self.x_high_obs, para_dict['reset_pos'][0])
-        self.y_manual_id = p.addUserDebugParameter("ee_y:", self.y_low_obs, self.y_high_obs, para_dict['reset_pos'][1])
+        self.x_manual_id = p.addUserDebugParameter("ee_x:", -1, 1, para_dict['reset_pos'][0])
+        self.y_manual_id = p.addUserDebugParameter("ee_y:", -1, 1, para_dict['reset_pos'][1])
         self.z_manual_id = p.addUserDebugParameter("ee_z:", self.z_low_obs, self.z_high_obs, para_dict['reset_pos'][2])
         self.yaw_manual_id = p.addUserDebugParameter("ee_yaw:", -np.pi/2, np.pi/2, para_dict['reset_ori'][2])
 
@@ -170,7 +170,6 @@ class Arm_env(gym.Env):
                 p.stepSimulation()
             pos_ori_data = self.get_obs()[:-4].reshape(self.num_boxes,-1)
             np.savetxt('urdf/objs_location.csv', np.hstack([pos_ori_data[:,:7], self.lwh_list]))
-
 
         else:
             obj_info = np.loadtxt('urdf/objs_location.csv')
@@ -342,20 +341,27 @@ if __name__ == '__main__':
     os.makedirs(para_dict['dataset_path'], exist_ok=True)
     env = Arm_env(para_dict=para_dict)
 
-
+    MODE = 0 # RL random or Manual
     for i in range(10000):
-        # loc = [[0.15,0,0.015],[0,np.pi/2,0]]
-        x_ml = p.readUserDebugParameter(env.x_manual_id)
-        y_ml = p.readUserDebugParameter(env.y_manual_id)
-        z_ml = p.readUserDebugParameter(env.z_manual_id)
-        yaw_ml = p.readUserDebugParameter(env.yaw_manual_id)
 
-        # random sample
-        random_sample = env.action_space.sample()
+        if MODE == 0:
+            # random sample
+            action = env.action_space.sample()
+            obs,r,done,_,_ = env.step(action)
+            print(r)
 
-        obs,r,done,_,_ = env.step(random_sample)
-        print(r)
+            if done:
+                env.reset()
 
-        if done:
-            env.reset()
+        else:
+            # control robot arm manually:
+
+            x_ml = p.readUserDebugParameter(env.x_manual_id)
+            y_ml = p.readUserDebugParameter(env.y_manual_id)
+            z_ml = p.readUserDebugParameter(env.z_manual_id)
+            yaw_ml = p.readUserDebugParameter(env.yaw_manual_id)
+
+            action = np.asarray([x_ml, y_ml, z_ml, yaw_ml])
+            obs,r,done,_,_ = env.step(action)
+            print(r)
 

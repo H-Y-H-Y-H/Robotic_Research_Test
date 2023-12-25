@@ -166,7 +166,7 @@ class Arm_env(gym.Env):
                 self.boxes_index.append(int(i + 2))
             for _ in range(100):
                 p.stepSimulation()
-            pos_ori_data = self.get_obs()[:-4].reshape(self.boxes_num,-1)
+            pos_ori_data = self.get_obs()[:-4].reshape(self.boxes_num_max,-1)
             np.savetxt('urdf/objs_location.csv', np.hstack([pos_ori_data[:,:7], self.lwh_list]))
 
         else:
@@ -237,12 +237,12 @@ class Arm_env(gym.Env):
 
     def get_r(self,obs_list):
 
-        obs_list = obs_list[:-4].reshape(self.boxes_num,-1) # last 4 data is the action
+        obs_list = obs_list[:-4].reshape(self.boxes_num_max,-1) # last 4 data is the action
         # print('obs_list:',obs_list)
         dist = []
         # calculate the dist of each two objects
-        for j in range(len(obs_list)-1):
-            for i in range(j+1, len(obs_list)):
+        for j in range(self.boxes_num-1):
+            for i in range(j+1, self.boxes_num):
                 dist.append(np.sqrt(np.sum((obs_list[j][:2]-obs_list[i][:2])**2)))
 
         dist_mean = np.mean(dist)
@@ -257,10 +257,10 @@ class Arm_env(gym.Env):
         reward -= energy
 
         # out-of-boundary penalty:
-        if (self.x_low_obs<obs_list[:,0]).all() and \
-                (self.x_high_obs > obs_list[:, 0]).all() and \
-            (self.y_low_obs<obs_list[:,1]).all() and \
-                (self.y_high_obs >obs_list[:,1]).all():
+        if (self.x_low_obs<obs_list[:self.boxes_num,0]).all() and \
+                (self.x_high_obs > obs_list[:self.boxes_num, 0]).all() and \
+            (self.y_low_obs<obs_list[:self.boxes_num,1]).all() and \
+                (self.y_high_obs >obs_list[:self.boxes_num,1]).all():
 
             return reward, False
 

@@ -241,8 +241,8 @@ class Arm_env(gym.Env):
 
         for _ in range(80):
             p.stepSimulation()
-            # if self.is_render:
-            #     time.sleep(1 / 480)
+            if self.is_render:
+                time.sleep(1 / 480)
 
     def get_r(self,obs_list):
 
@@ -260,10 +260,10 @@ class Arm_env(gym.Env):
         else:
             reward = dist_mean
 
-        # energy penalty:
-        energy = np.sum((self.action-self.last_action)**2) * 0.01
-        self.last_action = self.action
-        reward -= energy
+        # # energy penalty:
+        # energy = np.sum((self.action-self.last_action)**2) * 0.01
+        # self.last_action = self.action
+        # reward -= energy
 
         # out-of-boundary penalty:
         if (self.x_low_obs<obs_list[:,0]).all() and \

@@ -26,6 +26,7 @@ class Arm_env(gym.Env):
         self.init_ori_range = para_dict['init_ori_range']
         self.init_offset_range = para_dict['init_offset_range']
         self.boxes_num = self.para_dict['boxes_num']
+        self.boxes_num_max = self.para_dict['boxes_num_max']
         self.box_range = self.para_dict['box_range']
         self.urdf_path = para_dict['urdf_path']
         self.pybullet_path = pd.getDataPath()
@@ -85,11 +86,8 @@ class Arm_env(gym.Env):
                                        dtype=np.float32)
 
         # Define observation space (assuming a fixed number of objects for simplicity)
-        boxes_num = para_dict['boxes_num']
-        boxes_num_max = para_dict['boxes_num_max']
-
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf,
-                                            shape=(boxes_num_max* 7+4,),  # Position (3) + Orientation (4) for each object
+                                            shape=(self.boxes_num_max* 7 + 4,),  # Position (3) + Orientation (4) for each object
                                             dtype=np.float32)
         self.boxes_index =[]
         self.max_steps = 6
@@ -187,7 +185,6 @@ class Arm_env(gym.Env):
 
     def reset(self, seed=None, return_observation=True):
 
-
         home_loc = np.concatenate([self.para_dict['reset_pos'],self.para_dict['reset_ori'][2:]])
         self.act(a=home_loc)
         self.last_action = self.action
@@ -202,7 +199,7 @@ class Arm_env(gym.Env):
         for i in range(30):
 
             # traget_end = p.readUserDebugParameter(self.ee_manual_id)
-            traget_end = 0.035
+            traget_end = 0.035 # end effector can close at this joint position.
             p.setJointMotorControl2(self.arm_id, 7, p.POSITION_CONTROL,
                                     targetPosition=traget_end, force=self.para_dict['gripper_force'])
             p.setJointMotorControl2(self.arm_id, 8, p.POSITION_CONTROL,
@@ -213,7 +210,6 @@ class Arm_env(gym.Env):
 
         if seed is not None:
             np.random.seed(seed)
-
 
         initial_observation = self.get_obs()
         return initial_observation, {}
@@ -296,12 +292,18 @@ class Arm_env(gym.Env):
 
 
     def get_obs(self):
+        # Each object has 7 state: x,y,z,yaw + length, width, height.
+
         obs_list = []
         for item in self.boxes_index:
             loc = p.getBasePositionAndOrientation(item)
             loc = np.concatenate(loc)
             obs_list.append(loc)
-        obs_list = np.asarray(obs_list,dtype=np.float32).reshape(-1)
+        obs_list = np.asarray(obs_list).reshape(-1)
+        if self.boxes_num < self.boxes_num_max:
+            padding_zeros = np.zeros(7*(self.boxes_num_max-self.boxes_num))
+            obs_list = np.concatenate((obs_list,padding_zeros))
+
         obs_list = np.asarray(np.concatenate((obs_list,self.action)),dtype=np.float32)
         return obs_list
 
@@ -312,7 +314,6 @@ class Arm_env(gym.Env):
         #                                                                  renderer=p.ER_BULLET_HARDWARE_OPENGL)
         # img = np.asarray(image).reshape((480,640,4))[...,:3]/255
         # # img = np.transpose(img,(1,2,0))
-        #
         # img_path = self.para_dict['dataset_path'] + 'image.png'
         # plt.imsave(img_path, img)
 

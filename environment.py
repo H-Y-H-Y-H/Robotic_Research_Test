@@ -25,7 +25,7 @@ class Arm_env(gym.Env):
         self.init_pos_range = para_dict['init_pos_range']
         self.init_ori_range = para_dict['init_ori_range']
         self.init_offset_range = para_dict['init_offset_range']
-        self.num_boxes = self.para_dict['boxes_num']
+        self.boxes_num = self.para_dict['boxes_num']
         self.box_range = self.para_dict['box_range']
         self.urdf_path = para_dict['urdf_path']
         self.pybullet_path = pd.getDataPath()
@@ -80,15 +80,16 @@ class Arm_env(gym.Env):
         self.yaw_manual_id = p.addUserDebugParameter("ee_yaw:", -np.pi/2, np.pi/2, para_dict['reset_ori'][2])
 
         # Define action space (x, y, z, yaw)
-
         self.action_space = spaces.Box(low=np.array([-1, -1,  0.005, -np.pi/2]),
                                        high=np.array([1,1, 0.005, np.pi/2]),
                                        dtype=np.float32)
 
         # Define observation space (assuming a fixed number of objects for simplicity)
-        num_objects = para_dict['boxes_num']
+        boxes_num = para_dict['boxes_num']
+        boxes_num_max = para_dict['boxes_num_max']
+
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf,
-                                            shape=(num_objects* 7+4,),  # Position (3) + Orientation (4) for each object
+                                            shape=(boxes_num_max* 7+4,),  # Position (3) + Orientation (4) for each object
                                             dtype=np.float32)
         self.boxes_index =[]
         self.max_steps = 6
@@ -139,9 +140,9 @@ class Arm_env(gym.Env):
 
     def get_data_virtual(self):
 
-        length_range = np.round(np.random.uniform(self.box_range[0][0], self.box_range[0][1], size=(self.num_boxes, 1)), decimals=3)
-        width_range = np.round(np.random.uniform(self.box_range[1][0], np.minimum(length_range, 0.036), size=(self.num_boxes, 1)), decimals=3)
-        height_range = np.round(np.random.uniform(self.box_range[2][0], self.box_range[2][1], size=(self.num_boxes, 1)), decimals=3)
+        length_range = np.round(np.random.uniform(self.box_range[0][0], self.box_range[0][1], size=(self.boxes_num, 1)), decimals=3)
+        width_range = np.round(np.random.uniform(self.box_range[1][0], np.minimum(length_range, 0.036), size=(self.boxes_num, 1)), decimals=3)
+        height_range = np.round(np.random.uniform(self.box_range[2][0], self.box_range[2][1], size=(self.boxes_num, 1)), decimals=3)
         lwh_list = np.concatenate((length_range, width_range, height_range), axis=1)
         return lwh_list
 
@@ -149,32 +150,31 @@ class Arm_env(gym.Env):
 
         if not offline: # random initialize the env for robot.
             self.lwh_list = self.get_data_virtual()
-            self.num_boxes = np.copy(len(self.lwh_list))
-            rdm_ori_roll  = np.random.uniform(self.init_ori_range[0][0], self.init_ori_range[0][1], size=(self.num_boxes, 1))
-            rdm_ori_pitch = np.random.uniform(self.init_ori_range[1][0], self.init_ori_range[1][1], size=(self.num_boxes, 1))
-            rdm_ori_yaw   = np.random.uniform(self.init_ori_range[2][0], self.init_ori_range[2][1], size=(self.num_boxes, 1))
+            rdm_ori_roll  = np.random.uniform(self.init_ori_range[0][0], self.init_ori_range[0][1], size=(self.boxes_num, 1))
+            rdm_ori_pitch = np.random.uniform(self.init_ori_range[1][0], self.init_ori_range[1][1], size=(self.boxes_num, 1))
+            rdm_ori_yaw   = np.random.uniform(self.init_ori_range[2][0], self.init_ori_range[2][1], size=(self.boxes_num, 1))
             objs_ori = np.concatenate((rdm_ori_roll, rdm_ori_pitch, rdm_ori_yaw), axis=1)
 
-            rdm_pos_x = np.random.uniform(self.init_pos_range[0][0], self.init_pos_range[0][1], size=(self.num_boxes, 1))
-            rdm_pos_y = np.random.uniform(self.init_pos_range[1][0], self.init_pos_range[1][1], size=(self.num_boxes, 1))
-            rdm_pos_z = np.random.uniform(self.init_pos_range[2][0], self.init_pos_range[2][1], size=(self.num_boxes, 1))
+            rdm_pos_x = np.random.uniform(self.init_pos_range[0][0], self.init_pos_range[0][1], size=(self.boxes_num, 1))
+            rdm_pos_y = np.random.uniform(self.init_pos_range[1][0], self.init_pos_range[1][1], size=(self.boxes_num, 1))
+            rdm_pos_z = np.random.uniform(self.init_pos_range[2][0], self.init_pos_range[2][1], size=(self.boxes_num, 1))
             x_offset = np.random.uniform(self.init_offset_range[0][0], self.init_offset_range[0][1])
             y_offset = np.random.uniform(self.init_offset_range[1][0], self.init_offset_range[1][1])
             objs_pos = np.concatenate((rdm_pos_x + x_offset, rdm_pos_y + y_offset, rdm_pos_z), axis=1)
 
-            for i in range(self.num_boxes):
+            for i in range(self.boxes_num):
                 obj_name = f'object_{i}'
                 create_box(obj_name, objs_pos[i], p.getQuaternionFromEuler(objs_ori[i]), size=self.lwh_list[i])
                 self.boxes_index.append(int(i + 2))
             for _ in range(100):
                 p.stepSimulation()
-            pos_ori_data = self.get_obs()[:-4].reshape(self.num_boxes,-1)
+            pos_ori_data = self.get_obs()[:-4].reshape(self.boxes_num,-1)
             np.savetxt('urdf/objs_location.csv', np.hstack([pos_ori_data[:,:7], self.lwh_list]))
 
         else:
             obj_info = np.loadtxt('urdf/objs_location.csv')
             objs_pos, objs_ori, self.lwh_list = obj_info[:,:3],obj_info[:,3:7],obj_info[:,7:10]
-            for i in range(self.num_boxes):
+            for i in range(self.boxes_num):
                 obj_name = f'object_{i}'
                 create_box(obj_name, objs_pos[i], objs_ori[i], size=self.lwh_list[i])
                 self.boxes_index.append(int(i + 2))
@@ -241,7 +241,7 @@ class Arm_env(gym.Env):
 
     def get_r(self,obs_list):
 
-        obs_list = obs_list[:-4].reshape(self.num_boxes,-1) # last 4 data is the action
+        obs_list = obs_list[:-4].reshape(self.boxes_num,-1) # last 4 data is the action
         # print('obs_list:',obs_list)
         dist = []
         # calculate the dist of each two objects
@@ -327,6 +327,7 @@ if __name__ == '__main__':
                  'init_pos_range': [[0.13, 0.17], [-0.03, 0.03], [0.01, 0.02]], 'init_offset_range': [[-0.05, 0.05], [-0.1, 0.1]],
                  'init_ori_range': [[-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4]],
                  'boxes_num': np.random.randint(2,3),
+                 'boxes_num_max': 8,
                  'is_render': True,
                  'box_range': [[0.016, 0.048], [0.016], [0.01, 0.02]],
                  'box_mass': 0.1,

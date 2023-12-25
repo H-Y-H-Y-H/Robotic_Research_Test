@@ -26,6 +26,7 @@ def eval_model(num_episodes = 1):
     return average_reward
 
 train_RL = True
+loggerID=0
 
 para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, np.pi / 2, 0]),
              'save_img_flag': True,
@@ -44,7 +45,9 @@ para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, 
              'base_lateral_friction': 1, 'base_contact_damping': 1, 'base_contact_stiffness': 50000,
              'dataset_path': './knolling_box/',
              'urdf_path': './urdf/', }
+
 os.makedirs(para_dict['dataset_path'], exist_ok=True)
+os.makedirs('log%d'%loggerID, exist_ok=True)
 
 if train_RL:
     para_dict['is_render'] = False
@@ -69,9 +72,9 @@ if train_RL:
         if r>r_max:
             r= r_max
             # Save the model
-            model.save("ppo_model_best.zip")
-        model.save("ppo_model_last.zip")
-        np.savetxt('r_logger.csv',r_list)
+            model.save("log%d/ppo_model_best.zip"%loggerID)
+        model.save("log%d/ppo_model_last.zip"%loggerID)
+        np.savetxt('log%d/r_logger.csv'%loggerID,r_list)
 
 else:
 

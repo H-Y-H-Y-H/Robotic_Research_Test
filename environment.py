@@ -230,7 +230,7 @@ class Arm_env(gym.Env):
             p.setJointMotorControl2(self.arm_id, motor_index, p.POSITION_CONTROL,
                                     targetPosition=ik_angles0[motor_index], maxVelocity=20)
 
-        for _ in range(80):
+        for _ in range(60):
             p.stepSimulation()
             if self.is_render:
                 time.sleep(1 / 480)
@@ -250,11 +250,11 @@ class Arm_env(gym.Env):
             reward = 0.1
         else:
             reward = dist_mean
-
-        # energy penalty:
-        energy = np.sum((self.action-self.last_action)**2) * 0.01
-        self.last_action = self.action
-        reward -= energy
+        #
+        # # energy penalty:
+        # energy = np.sum((self.action-self.last_action)**2) * 0.01
+        # self.last_action = self.action
+        # reward -= energy
 
         # out-of-boundary penalty:
         if (self.x_low_obs<obs_list[:self.boxes_num,0]).all() and \

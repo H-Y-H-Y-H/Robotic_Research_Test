@@ -6,7 +6,7 @@ from environment import *
 np.random.seed(0)
 random.seed(0)
 
-def eval_model(num_episodes = 10):
+def eval_model(num_episodes = 1):
 
     total_rewards = []
 

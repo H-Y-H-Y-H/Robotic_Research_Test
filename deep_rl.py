@@ -28,7 +28,7 @@ def eval_model(num_episodes = 1):
     print("Average Reward:", average_reward)
     return average_reward
 
-train_RL = True
+train_RL = False
 
 para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, np.pi / 2, 0]),
              'save_img_flag': True,
@@ -36,7 +36,7 @@ para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, 
              'init_offset_range': [[-0.05, 0.05], [-0.1, 0.1]],
              'init_ori_range': [[-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4]],
              'boxes_num': np.random.randint(2, 3),
-             'boxes_num_max': 8,
+             'boxes_num_max': 2,
              'is_render': True,
              'box_range': [[0.016, 0.048], [0.016], [0.01, 0.02]],
              'box_mass': 0.1,

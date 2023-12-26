@@ -26,7 +26,7 @@ def eval_model(num_episodes = 1):
     return average_reward
 
 train_RL = True
-loggerID=0
+loggerID=4
 
 para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, np.pi / 2, 0]),
              'save_img_flag': True,
@@ -65,7 +65,7 @@ if train_RL:
     r_list = []
     r_max = -np.inf
     for epoch in range(num_epoch):
-        model.learn(total_timesteps=1000)
+        model.learn(total_timesteps=10000)
         r = eval_model()
         r_list.append(r)
 

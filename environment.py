@@ -9,7 +9,7 @@ import gymnasium as gym
 from gymnasium import spaces
 import cv2
 import matplotlib.pyplot as plt
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.env_checker import check_env
 
 

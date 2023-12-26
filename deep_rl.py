@@ -3,7 +3,7 @@ from environment import *
 np.random.seed(0)
 random.seed(0)
 
-def eval_model(num_episodes = 1):
+def eval_model(num_episodes = 40):
 
     total_rewards = []
 
@@ -25,8 +25,8 @@ def eval_model(num_episodes = 1):
     print("Average Reward:", average_reward)
     return average_reward
 
-train_RL = True
-loggerID=4
+train_RL = False
+loggerID=1
 
 para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, np.pi / 2, 0]),
              'save_img_flag': True,
@@ -50,17 +50,17 @@ os.makedirs(para_dict['dataset_path'], exist_ok=True)
 os.makedirs('log%d'%loggerID, exist_ok=True)
 
 if train_RL:
-    para_dict['is_render'] = False
+    para_dict['is_render'] = True
     env = Arm_env(para_dict=para_dict)
 
     num_epoch = 10000
 
     # start from scratch
-    model = PPO("MlpPolicy", env, verbose=1)
+    # model = PPO("MlpPolicy", env, verbose=1)
 
     # pre-trained model:
-    # model = PPO.load("ppo_model_last.zip")
-    # model.set_env(env)
+    model = PPO.load("pre_trained/log1/ppo_model_best.zip")
+    model.set_env(env)
 
     r_list = []
     r_max = -np.inf
@@ -81,7 +81,7 @@ else:
     env = Arm_env(para_dict=para_dict)
 
     # Load the trained model
-    model = PPO.load("ppo_model_best(energy_pen).zip")
+    model = PPO.load("pre_trained/log%d/ppo_model_best.zip"%loggerID)
 
     # Evaluate the model
     eval_model()

@@ -91,9 +91,13 @@ class Arm_env(gym.Env):
                                             dtype=np.float32)
         self.boxes_index =[]
         self.max_steps = 6
+        self.init_id = 0
+        self.offline_init_obj_id = 40
         self.create_scene()
         self.create_arm()
         self.reset()
+        self.init_id = 0
+
 
     def create_scene(self,random_lightness=True,use_texture=True):
         self.baseid = p.loadURDF(self.urdf_path + "plane_zzz.urdf", useMaximalCoordinates=True)
@@ -167,10 +171,11 @@ class Arm_env(gym.Env):
             for _ in range(100):
                 p.stepSimulation()
             pos_ori_data = self.get_obs()[:-4].reshape(self.boxes_num_max,-1)
-            np.savetxt('urdf/objs_location.csv', np.hstack([pos_ori_data[:,:7], self.lwh_list]))
+            info_obj = np.hstack([pos_ori_data[:self.boxes_num, :7], self.lwh_list])
+            return info_obj
 
         else:
-            obj_info = np.loadtxt('urdf/objs_location.csv')
+            obj_info = np.loadtxt('urdf/obj_init_info/%dobj_%d.csv'%(self.boxes_num,self.init_id))
             objs_pos, objs_ori, self.lwh_list = obj_info[:,:3],obj_info[:,3:7],obj_info[:,7:10]
             for i in range(self.boxes_num):
                 obj_name = f'object_{i}'
@@ -184,20 +189,11 @@ class Arm_env(gym.Env):
 
 
     def reset(self, seed=None, return_observation=True):
-
         home_loc = np.concatenate([self.para_dict['reset_pos'],self.para_dict['reset_ori'][2:]])
-        self.act(a=home_loc)
+        self.act(input_a=home_loc)
         self.last_action = self.action
 
-        if len(self.boxes_index) == 0:
-            self.create_objects(offline=True)
-        else:
-            for k in self.boxes_index: p.removeBody(k)
-            self.boxes_index = []
-            self.create_objects(offline=True)
-
         for i in range(30):
-
             # traget_end = p.readUserDebugParameter(self.ee_manual_id)
             traget_end = 0.035 # end effector can close at this joint position.
             p.setJointMotorControl2(self.arm_id, 7, p.POSITION_CONTROL,
@@ -206,20 +202,40 @@ class Arm_env(gym.Env):
                                     targetPosition=traget_end, force=self.para_dict['gripper_force'])
             p.stepSimulation()
 
+        while 1:
+            if len(self.boxes_index) == 0:
+                self.create_objects(offline=True)
+            else:
+                for k in self.boxes_index: p.removeBody(k)
+                self.boxes_index = []
+                self.create_objects(offline=True)
+
+            obs_list_flatten = self.get_obs()
+            obs_list = obs_list_flatten[:-4].reshape(self.boxes_num_max, -1)  # last 4 data is the action
+            if (self.x_low_obs<obs_list[:self.boxes_num,0]).all() and \
+                    (self.x_high_obs > obs_list[:self.boxes_num, 0]).all() and \
+                (self.y_low_obs<obs_list[:self.boxes_num,1]).all() and \
+                    (self.y_high_obs >obs_list[:self.boxes_num,1]).all():
+                break
+
         self.current_step = 0
+        self.init_id +=1
+        if self.init_id == self.offline_init_obj_id:
+            self.init_id =0
 
         if seed is not None:
             np.random.seed(seed)
 
-        initial_observation = self.get_obs()
-        return initial_observation, {}
+        return obs_list_flatten, {}
 
 
-    def act(self, a):
+    def act(self, input_a):
 
+        a = np.copy(input_a)
         a[0] = (a[0] +1 )/2 * (self.x_high_obs - self.x_low_obs)+self.x_low_obs
         a[1] = (a[1] +1 )/2 * (self.y_high_obs - self.y_low_obs)+self.y_low_obs
         self.action = a
+
         target_location = [a[:3],[0,np.pi/2,a[3]]]
 
         ik_angles0 = p.calculateInverseKinematics(self.arm_id, 9, targetPosition=target_location[0],
@@ -344,9 +360,10 @@ if __name__ == '__main__':
     env = Arm_env(para_dict=para_dict)
 
     MODE = 0 # RL random or Manual
-    for i in range(10000):
 
-        if MODE == 0:
+
+    if MODE == 0:
+        for i in range(10000):
             # random sample
             action = env.action_space.sample()
             obs,r,done,_,_ = env.step(action)
@@ -355,7 +372,17 @@ if __name__ == '__main__':
             if done:
                 env.reset()
 
-        else:
+    elif MODE == 1:
+        for i in range(40):
+            # obj initialization:
+            for k in env.boxes_index: p.removeBody(k)
+            env.boxes_index = []
+            info_obj = env.create_objects(False)
+            np.savetxt('urdf/obj_init_info/%dobj_%d.csv'%(env.boxes_num,i),info_obj)
+
+            env.init_id+=1
+    else:
+        for i in range(10000):
             # control robot arm manually:
 
             x_ml = p.readUserDebugParameter(env.x_manual_id)

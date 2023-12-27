@@ -26,7 +26,7 @@ def eval_model(num_episodes = 40):
     return average_reward
 
 train_RL = True
-loggerID=1
+loggerID=3
 
 para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, np.pi / 2, 0]),
              'save_img_flag': True,
@@ -59,7 +59,7 @@ if train_RL:
     # model = PPO("MlpPolicy", env, verbose=1)
 
     # pre-trained model:
-    model = PPO.load("pre_trained/log1/ppo_model_best.zip")
+    model = PPO.load("pre_trained/log2/ppo_model_best.zip")
     model.set_env(env)
 
     r_list = []

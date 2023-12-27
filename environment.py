@@ -15,7 +15,7 @@ from stable_baselines3.common.env_checker import check_env
 
 class Arm_env(gym.Env):
 
-    def __init__(self, para_dict, knolling_para=None):
+    def __init__(self, para_dict, knolling_para=None,offline_data= True):
         super(Arm_env, self).__init__()
 
         self.para_dict = para_dict
@@ -90,6 +90,7 @@ class Arm_env(gym.Env):
                                             shape=(self.boxes_num_max* 7 + 4,),  # Position (3) + Orientation (4) for each object
                                             dtype=np.float32)
         self.boxes_index =[]
+        self.offline_data = offline_data
         self.max_steps = 6
         self.init_id = 0
         self.offline_init_obj_id = 40
@@ -148,9 +149,9 @@ class Arm_env(gym.Env):
         lwh_list = np.concatenate((length_range, width_range, height_range), axis=1)
         return lwh_list
 
-    def create_objects(self,offline=True):
+    def create_objects(self):
 
-        if not offline: # random initialize the env for robot.
+        if not self.offline_data: # random initialize the env for robot.
             self.lwh_list = self.get_data_virtual()
             rdm_ori_roll  = np.random.uniform(self.init_ori_range[0][0], self.init_ori_range[0][1], size=(self.boxes_num, 1))
             rdm_ori_pitch = np.random.uniform(self.init_ori_range[1][0], self.init_ori_range[1][1], size=(self.boxes_num, 1))
@@ -172,21 +173,25 @@ class Arm_env(gym.Env):
                 p.stepSimulation()
             pos_ori_data = self.get_obs()[:-4].reshape(self.boxes_num_max,-1)
             info_obj = np.hstack([pos_ori_data[:self.boxes_num, :7], self.lwh_list])
-            return info_obj
+            self.init_id += 1
 
         else:
-            obj_info = np.loadtxt('urdf/obj_init_info/%dobj_%d.csv'%(self.boxes_num,self.init_id))
-            objs_pos, objs_ori, self.lwh_list = obj_info[:,:3],obj_info[:,3:7],obj_info[:,7:10]
+            info_obj = np.loadtxt('urdf/obj_init_info/%dobj_%d.csv'%(self.boxes_num,self.init_id))
+            objs_pos, objs_ori, self.lwh_list = info_obj[:,:3],info_obj[:,3:7],info_obj[:,7:10]
             for i in range(self.boxes_num):
                 obj_name = f'object_{i}'
                 create_box(obj_name, objs_pos[i], objs_ori[i], size=self.lwh_list[i])
                 self.boxes_index.append(int(i + 2))
 
+            self.init_id += 1
+            if self.init_id == self.offline_init_obj_id:
+                self.init_id = 0
 
         p.changeDynamics(self.baseid, -1, lateralFriction=self.para_dict['base_lateral_friction'],
                          contactDamping=self.para_dict['base_contact_damping'],
                          contactStiffness=self.para_dict['base_contact_stiffness'])
 
+        return info_obj
 
     def reset(self, seed=None, return_observation=True):
         home_loc = np.concatenate([self.para_dict['reset_pos'],self.para_dict['reset_ori'][2:]])
@@ -204,11 +209,11 @@ class Arm_env(gym.Env):
 
         while 1:
             if len(self.boxes_index) == 0:
-                self.create_objects(offline=True)
+                self.create_objects()
             else:
                 for k in self.boxes_index: p.removeBody(k)
                 self.boxes_index = []
-                self.create_objects(offline=True)
+                self.create_objects()
 
             obs_list_flatten = self.get_obs()
             obs_list = obs_list_flatten[:-4].reshape(self.boxes_num_max, -1)  # last 4 data is the action
@@ -219,9 +224,7 @@ class Arm_env(gym.Env):
                 break
 
         self.current_step = 0
-        self.init_id +=1
-        if self.init_id == self.offline_init_obj_id:
-            self.init_id =0
+
 
         if seed is not None:
             np.random.seed(seed)
@@ -248,8 +251,8 @@ class Arm_env(gym.Env):
 
         for _ in range(60):
             p.stepSimulation()
-            if self.is_render:
-                time.sleep(1 / 480)
+            # if self.is_render:
+            #     time.sleep(1 / 480)
 
     def get_r(self,obs_list):
 

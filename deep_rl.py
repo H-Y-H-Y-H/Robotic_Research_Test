@@ -25,7 +25,7 @@ def eval_model(num_episodes = 40):
     print("Average Reward:", average_reward)
     return average_reward
 
-train_RL = False
+train_RL = True
 loggerID=1
 
 para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, np.pi / 2, 0]),
@@ -50,7 +50,7 @@ os.makedirs(para_dict['dataset_path'], exist_ok=True)
 os.makedirs('log%d'%loggerID, exist_ok=True)
 
 if train_RL:
-    para_dict['is_render'] = True
+    para_dict['is_render'] = False
     env = Arm_env(para_dict=para_dict)
 
     num_epoch = 10000

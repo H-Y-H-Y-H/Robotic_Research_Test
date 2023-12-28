@@ -52,7 +52,7 @@ num_scence = 40
 
 os.makedirs('log%d'%loggerID, exist_ok=True)
 if train_RL:
-    wandb.init(project="RL_sep", entity="robotics", mode="disabled")
+    wandb.init(project="RL_sep", entity="robotics") # , mode="disabled"
 
     para_dict['is_render'] = False
     env = Arm_env(para_dict=para_dict,init_scence=num_scence)
@@ -81,7 +81,7 @@ if train_RL:
         r_list.append(r)
 
         if r>r_max:
-            r= r_max
+            r_max = r
             # Save the model
             model.save("log%d/ppo_model_best.zip"%loggerID)
         model.save("log%d/ppo_model_last.zip"%loggerID)

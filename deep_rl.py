@@ -25,7 +25,7 @@ def eval_model(num_episodes = 40):
     print("Average Reward:", average_reward)
     return average_reward
 
-train_RL = True
+train_RL = False
 loggerID=3
 
 para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, np.pi / 2, 0]),
@@ -56,11 +56,11 @@ if train_RL:
     num_epoch = 10000
 
     # start from scratch
-    # model = PPO("MlpPolicy", env, verbose=1)
+    model = PPO("MlpPolicy", env, verbose=1)
 
     # pre-trained model:
-    model = PPO.load("pre_trained/log2/ppo_model_best.zip")
-    model.set_env(env)
+    # model = PPO.load("pre_trained/log2/ppo_model_best.zip")
+    # model.set_env(env)
 
     r_list = []
     r_max = -np.inf
@@ -81,7 +81,7 @@ else:
     env = Arm_env(para_dict=para_dict)
 
     # Load the trained model
-    model = PPO.load("pre_trained/log%d/ppo_model_best.zip"%loggerID)
+    model = PPO.load("log%d/ppo_model_best.zip"%loggerID)
 
     # Evaluate the model
     eval_model()

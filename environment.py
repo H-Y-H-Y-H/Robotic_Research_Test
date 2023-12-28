@@ -173,7 +173,6 @@ class Arm_env(gym.Env):
                 p.stepSimulation()
             pos_ori_data = self.get_obs()[:-4].reshape(self.boxes_num_max,-1)
             info_obj = np.hstack([pos_ori_data[:self.boxes_num, :7], self.lwh_list])
-            self.init_id += 1
 
         else:
             info_obj = np.loadtxt('urdf/obj_init_info/%dobj_%d.csv'%(self.boxes_num,self.init_id))
@@ -217,11 +216,24 @@ class Arm_env(gym.Env):
 
             obs_list_flatten = self.get_obs()
             obs_list = obs_list_flatten[:-4].reshape(self.boxes_num_max, -1)  # last 4 data is the action
+
+            # whether the objs are in the scence.
             if (self.x_low_obs<obs_list[:self.boxes_num,0]).all() and \
                     (self.x_high_obs > obs_list[:self.boxes_num, 0]).all() and \
                 (self.y_low_obs<obs_list[:self.boxes_num,1]).all() and \
                     (self.y_high_obs >obs_list[:self.boxes_num,1]).all():
-                break
+
+                # whether the objects are too closed to each other.
+                dist = []
+                # calculate the dist of each two objects
+                for j in range(self.boxes_num - 1):
+                    for i in range(j + 1, self.boxes_num):
+                        dist.append(np.sqrt(np.sum((obs_list[j][:2] - obs_list[i][:2]) ** 2)))
+                dist = np.array(dist)
+                if (dist<0.04).any():
+                    print('successful scence generated.')
+                    break
+
 
         self.current_step = 0
 
@@ -251,8 +263,8 @@ class Arm_env(gym.Env):
 
         for _ in range(60):
             p.stepSimulation()
-            # if self.is_render:
-            #     time.sleep(1 / 480)
+            if self.is_render:
+                time.sleep(1 / 480)
 
     def get_r(self,obs_list):
 
@@ -362,7 +374,7 @@ if __name__ == '__main__':
     os.makedirs(para_dict['dataset_path'], exist_ok=True)
     env = Arm_env(para_dict=para_dict)
 
-    MODE = 0 # RL random or Manual
+    MODE = 1 # RL random or Manual
 
 
     if MODE == 0:
@@ -376,14 +388,30 @@ if __name__ == '__main__':
                 env.reset()
 
     elif MODE == 1:
-        for i in range(40):
+        env.offline_data = False
+        n_samples = 40
+        count = 0
+        while 1:
             # obj initialization:
             for k in env.boxes_index: p.removeBody(k)
             env.boxes_index = []
             info_obj = env.create_objects()
-            np.savetxt('urdf/obj_init_info/%dobj_%d.csv'%(env.boxes_num,i),info_obj)
 
-            env.init_id+=1
+            # whether the objects are too closed to each other.
+            dist = []
+            # calculate the dist of each two objects
+            for j in range(env.boxes_num - 1):
+                for i in range(j + 1, env.boxes_num):
+                    dist.append(np.sqrt(np.sum((info_obj[j][:2] - info_obj[i][:2]) ** 2)))
+            dist = np.array(dist)
+            if (dist < 0.035).any():
+                print('successful scence generated.')
+                np.savetxt('urdf/obj_init_info/%dobj_%d.csv'%(env.boxes_num,env.init_id),info_obj)
+                env.init_id+=1
+                count+=1
+            if count == n_samples:
+                break
+
     else:
         for i in range(10000):
             # control robot arm manually:

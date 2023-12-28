@@ -48,11 +48,11 @@ para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, 
 
 train_RL = True
 loggerID=0
-num_scence = 1
+num_scence = 5
 
 os.makedirs('log%d'%loggerID, exist_ok=True)
 if train_RL:
-    wandb.init(project="RL_sep", entity="robotics")
+    wandb.init(project="RL_sep", entity="robotics", mode="disabled")
 
     para_dict['is_render'] = True
     env = Arm_env(para_dict=para_dict,init_scence=num_scence)

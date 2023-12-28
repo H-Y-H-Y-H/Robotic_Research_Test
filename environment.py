@@ -223,15 +223,15 @@ class Arm_env(gym.Env):
                 (self.y_low_obs<obs_list[:self.boxes_num,1]).all() and \
                     (self.y_high_obs >obs_list[:self.boxes_num,1]).all():
 
-                # whether the objects are too closed to each other.
-                dist = []
-                # calculate the dist of each two objects
-                for j in range(self.boxes_num - 1):
-                    for i in range(j + 1, self.boxes_num):
-                        dist.append(np.sqrt(np.sum((obs_list[j][:2] - obs_list[i][:2]) ** 2)))
-                dist = np.array(dist)
-                if (dist<0.04).any():
-                    print('successful scence generated.')
+                # # whether the objects are too closed to each other.
+                # dist = []
+                # # calculate the dist of each two objects
+                # for j in range(self.boxes_num - 1):
+                #     for i in range(j + 1, self.boxes_num):
+                #         dist.append(np.sqrt(np.sum((obs_list[j][:2] - obs_list[i][:2]) ** 2)))
+                # dist = np.array(dist)
+                # if (dist<0.04).any():
+                #     print('successful scence generated.')
                     break
 
 

@@ -47,14 +47,14 @@ para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, 
              'urdf_path': './urdf/', }
 
 train_RL = True
-loggerID=0
-num_scence = 5
+loggerID=5
+num_scence = 40
 
 os.makedirs('log%d'%loggerID, exist_ok=True)
 if train_RL:
     wandb.init(project="RL_sep", entity="robotics", mode="disabled")
 
-    para_dict['is_render'] = True
+    para_dict['is_render'] = False
     env = Arm_env(para_dict=para_dict,init_scence=num_scence)
 
     num_epoch = 10000

@@ -15,7 +15,7 @@ from stable_baselines3.common.env_checker import check_env
 
 class Arm_env(gym.Env):
 
-    def __init__(self, para_dict, knolling_para=None,offline_data= True):
+    def __init__(self, para_dict, knolling_para=None,offline_data= True,init_scence = 40):
         super(Arm_env, self).__init__()
 
         self.para_dict = para_dict
@@ -93,7 +93,7 @@ class Arm_env(gym.Env):
         self.offline_data = offline_data
         self.max_steps = 6
         self.init_id = 0
-        self.offline_init_obj_id = 40
+        self.init_scence = init_scence
         self.create_scene()
         self.create_arm()
         self.reset()
@@ -184,7 +184,7 @@ class Arm_env(gym.Env):
                 self.boxes_index.append(int(i + 2))
 
             self.init_id += 1
-            if self.init_id == self.offline_init_obj_id:
+            if self.init_id == self.init_scence:
                 self.init_id = 0
 
         p.changeDynamics(self.baseid, -1, lateralFriction=self.para_dict['base_lateral_friction'],
@@ -380,7 +380,7 @@ if __name__ == '__main__':
             # obj initialization:
             for k in env.boxes_index: p.removeBody(k)
             env.boxes_index = []
-            info_obj = env.create_objects(False)
+            info_obj = env.create_objects()
             np.savetxt('urdf/obj_init_info/%dobj_%d.csv'%(env.boxes_num,i),info_obj)
 
             env.init_id+=1

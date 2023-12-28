@@ -1,4 +1,7 @@
 from environment import *
+import wandb
+
+
 
 np.random.seed(0)
 random.seed(0)
@@ -18,15 +21,12 @@ def eval_model(num_episodes = 40):
 
             obs, reward, done, _, info = env.step(action)
             total_reward += reward
-
+        print(total_reward)
         total_rewards.append(total_reward)
 
     average_reward = np.mean(total_rewards)
     print("Average Reward:", average_reward)
     return average_reward
-
-train_RL = False
-loggerID=3
 
 para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, np.pi / 2, 0]),
              'save_img_flag': True,
@@ -46,27 +46,38 @@ para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, 
              'dataset_path': './knolling_box/',
              'urdf_path': './urdf/', }
 
-os.makedirs(para_dict['dataset_path'], exist_ok=True)
-os.makedirs('log%d'%loggerID, exist_ok=True)
+train_RL = True
+loggerID=0
+num_scence = 1
 
+os.makedirs('log%d'%loggerID, exist_ok=True)
 if train_RL:
-    para_dict['is_render'] = False
-    env = Arm_env(para_dict=para_dict)
+    wandb.init(project="RL_sep", entity="robotics")
+
+    para_dict['is_render'] = True
+    env = Arm_env(para_dict=para_dict,init_scence=num_scence)
 
     num_epoch = 10000
 
     # start from scratch
-    model = PPO("MlpPolicy", env, verbose=1)
+    # model = PPO("MlpPolicy", env, verbose=1)
 
     # pre-trained model:
-    # model = PPO.load("pre_trained/log2/ppo_model_best.zip")
-    # model.set_env(env)
+    model = PPO.load("pre_trained/log0/ppo_model_best.zip")
+    model.set_env(env)
+
+    # Configure wandb with hyperparameters
+    config = {
+        "loggerID": loggerID,
+        'num_scence': num_scence,
+    }
+    wandb.config.update(config)
 
     r_list = []
     r_max = -np.inf
     for epoch in range(num_epoch):
-        model.learn(total_timesteps=10000)
-        r = eval_model()
+        model.learn(total_timesteps=5000)
+        r = eval_model(num_episodes=num_scence)
         r_list.append(r)
 
         if r>r_max:
@@ -75,6 +86,9 @@ if train_RL:
             model.save("log%d/ppo_model_best.zip"%loggerID)
         model.save("log%d/ppo_model_last.zip"%loggerID)
         np.savetxt('log%d/r_logger.csv'%loggerID,r_list)
+
+        # Log metrics to wandb
+        wandb.log({"reward": r})
 
 else:
 

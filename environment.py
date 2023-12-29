@@ -281,7 +281,13 @@ class Arm_env(gym.Env):
             reward = 0.1
         else:
             reward = dist_mean
-        #
+
+        # Penalty: Arm ee to the center of the pile.
+        center_obj_loc = np.mean(obs_list[:self.boxes_num],axis=0)[:3]
+        ee_obj = center_obj_loc - np.asarray(p.getLinkState(self.arm_id, 6)[0])
+        ee_obj_r = -np.sum(ee_obj**2)
+        reward += ee_obj_r
+
         # # energy penalty:
         # energy = np.sum((self.action-self.last_action)**2) * 0.01
         # self.last_action = self.action
@@ -374,7 +380,7 @@ if __name__ == '__main__':
     os.makedirs(para_dict['dataset_path'], exist_ok=True)
     env = Arm_env(para_dict=para_dict)
 
-    MODE = 1 # RL random or Manual
+    MODE = 0 # RL random or Manual
 
 
     if MODE == 0:

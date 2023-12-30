@@ -47,7 +47,7 @@ para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, 
              'urdf_path': './urdf/', }
 
 train_RL = True
-loggerID=5
+loggerID=3
 num_scence = 40
 
 os.makedirs('log%d'%loggerID, exist_ok=True)
@@ -60,11 +60,11 @@ if train_RL:
     num_epoch = 10000
 
     # start from scratch
-    # model = PPO("MlpPolicy", env, verbose=1)
+    model = PPO("MlpPolicy", env, verbose=1)
 
     # pre-trained model:
-    model = PPO.load("pre_trained/log0/ppo_model_best.zip")
-    model.set_env(env)
+    # model = PPO.load("pre_trained/log0/ppo_model_best.zip")
+    # model.set_env(env)
 
     # Configure wandb with hyperparameters
     config = {

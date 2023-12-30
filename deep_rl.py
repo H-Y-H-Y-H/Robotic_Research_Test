@@ -47,7 +47,7 @@ para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, 
              'urdf_path': './urdf/', }
 
 train_RL = True
-loggerID=3
+loggerID=
 num_scence = 40
 
 os.makedirs('log%d'%loggerID, exist_ok=True)

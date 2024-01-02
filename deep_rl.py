@@ -47,8 +47,8 @@ para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, 
              'urdf_path': './urdf/', }
 
 train_RL = True
-loggerID=
-num_scence = 40
+loggerID=70
+num_scence = 10000
 
 os.makedirs('log%d'%loggerID, exist_ok=True)
 if train_RL:
@@ -60,11 +60,11 @@ if train_RL:
     num_epoch = 10000
 
     # start from scratch
-    model = PPO("MlpPolicy", env, verbose=1)
+    # model = PPO("MlpPolicy", env, verbose=1)
 
     # pre-trained model:
-    # model = PPO.load("pre_trained/log0/ppo_model_best.zip")
-    # model.set_env(env)
+    model = PPO.load(f"log{10}/ppo_model_best.zip")
+    model.set_env(env)
 
     # Configure wandb with hyperparameters
     config = {
@@ -76,8 +76,8 @@ if train_RL:
     r_list = []
     r_max = -np.inf
     for epoch in range(num_epoch):
-        model.learn(total_timesteps=5000)
-        r = eval_model(num_episodes=num_scence)
+        model.learn(total_timesteps=10000)
+        r = eval_model(num_episodes=100)
         r_list.append(r)
 
         if r>r_max:
@@ -88,7 +88,8 @@ if train_RL:
         np.savetxt('log%d/r_logger.csv'%loggerID,r_list)
 
         # Log metrics to wandb
-        wandb.log({"reward": r})
+        wandb.log({"reward": r,
+                   "best_r":r_max})
 
 else:
 

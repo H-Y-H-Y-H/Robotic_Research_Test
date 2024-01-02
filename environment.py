@@ -175,7 +175,13 @@ class Arm_env(gym.Env):
             info_obj = np.hstack([pos_ori_data[:self.boxes_num, :7], self.lwh_list])
 
         else:
-            info_obj = np.loadtxt('urdf/obj_init_info/%dobj_%d.csv'%(self.boxes_num,self.init_id))
+
+            # random_id = random.randint(0,99999)
+            list_path = 'C:/Users/yuhan/Downloads/obj_init_dataset/2obj_%d.csv'%self.init_id
+
+            # info_obj = np.loadtxt('urdf/obj_init_info/%dobj_%d.csv'%(self.boxes_num,self.init_id))
+            info_obj = np.loadtxt(list_path)
+
             objs_pos, objs_ori, self.lwh_list = info_obj[:,:3],info_obj[:,3:7],info_obj[:,7:10]
             for i in range(self.boxes_num):
                 obj_name = f'object_{i}'

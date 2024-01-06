@@ -26,7 +26,6 @@ class Arm_env(gym.Env):
         self.init_ori_range = para_dict['init_ori_range']
         self.init_offset_range = para_dict['init_offset_range']
         self.boxes_num = self.para_dict['boxes_num']
-        self.boxes_num_max = self.para_dict['boxes_num_max']
         self.box_range = self.para_dict['box_range']
         self.urdf_path = para_dict['urdf_path']
         self.pybullet_path = pd.getDataPath()
@@ -87,7 +86,7 @@ class Arm_env(gym.Env):
 
         # Define observation space (assuming a fixed number of objects for simplicity)
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf,
-                                            shape=(self.boxes_num_max* 7 + 4,),  # Position (3) + Orientation (4) for each object
+                                            shape=(2 * 7 + 4,),  # Position (3) + Orientation (4) for each object
                                             dtype=np.float32)
         self.boxes_index =[]
         self.offline_data = offline_data
@@ -171,8 +170,8 @@ class Arm_env(gym.Env):
                 self.boxes_index.append(int(i + 2))
             for _ in range(100):
                 p.stepSimulation()
-            pos_ori_data = self.get_obs()[:-4].reshape(self.boxes_num_max,-1)
-            info_obj = np.hstack([pos_ori_data[:self.boxes_num, :7], self.lwh_list])
+            pos_ori_data = self.get_obs()[:-4].reshape(2,-1)
+            info_obj = np.hstack([pos_ori_data[:, :7], self.lwh_list])
 
         else:
 
@@ -213,21 +212,19 @@ class Arm_env(gym.Env):
             p.stepSimulation()
 
         while 1:
-            if len(self.boxes_index) == 0:
-                self.create_objects()
-            else:
+            if len(self.boxes_index) != 0:
                 for k in self.boxes_index: p.removeBody(k)
                 self.boxes_index = []
-                self.create_objects()
 
+            self.create_objects()
             obs_list_flatten = self.get_obs()
-            obs_list = obs_list_flatten[:-4].reshape(self.boxes_num_max, -1)  # last 4 data is the action
+            obs_list = obs_list_flatten[:-4].reshape(2, -1)  # last 4 data is the action, 2 objects
 
             # whether the objs are in the scence.
-            if (self.x_low_obs<obs_list[:self.boxes_num,0]).all() and \
+            if (self.x_low_obs<obs_list[:self.boxes_num, 0]).all() and \
                     (self.x_high_obs > obs_list[:self.boxes_num, 0]).all() and \
-                (self.y_low_obs<obs_list[:self.boxes_num,1]).all() and \
-                    (self.y_high_obs >obs_list[:self.boxes_num,1]).all():
+                (self.y_low_obs<obs_list[:self.boxes_num, 1]).all() and \
+                    (self.y_high_obs >obs_list[:self.boxes_num, 1]).all():
 
                 # # whether the objects are too closed to each other.
                 # dist = []
@@ -240,9 +237,7 @@ class Arm_env(gym.Env):
                 #     print('successful scence generated.')
                     break
 
-
         self.current_step = 0
-
 
         if seed is not None:
             np.random.seed(seed)
@@ -272,12 +267,12 @@ class Arm_env(gym.Env):
             if self.is_render:
                 time.sleep(1 / 480)
 
-    def get_r(self,obs_list):
+    def get_r(self):
 
-        obs_list = obs_list[:-4].reshape(self.boxes_num_max,-1) # last 4 data is the action
-        # print('obs_list:',obs_list)
-        dist = []
+        obs_list = self.get_all_obj_info()
+
         # calculate the dist of each two objects
+        dist = []
         for j in range(self.boxes_num-1):
             for i in range(j+1, self.boxes_num):
                 dist.append(np.sqrt(np.sum((obs_list[j][:2]-obs_list[i][:2])**2)))
@@ -312,7 +307,7 @@ class Arm_env(gym.Env):
     def step(self,a):
         self.act(a)
         obs_list = self.get_obs()
-        r,Done = self.get_r(obs_list)
+        r, Done = self.get_r()
 
         # robot arm becomes crazy
         bar_pos = np.asarray(p.getLinkState(self.arm_id, 6)[0])
@@ -333,22 +328,42 @@ class Arm_env(gym.Env):
         truncated = False
         return obs_list, r, Done, truncated, {}
 
-
-    def get_obs(self):
+    def get_all_obj_info(self):
         # Each object has 7 state: x,y,z,yaw + length, width, height.
-
         obs_list = []
         for item in self.boxes_index:
             loc = p.getBasePositionAndOrientation(item)
             loc = np.concatenate(loc)
             obs_list.append(loc)
-        obs_list = np.asarray(obs_list).reshape(-1)
-        if self.boxes_num < self.boxes_num_max:
-            padding_zeros = np.zeros(7*(self.boxes_num_max-self.boxes_num))
-            obs_list = np.concatenate((obs_list,padding_zeros))
+
+        obs_list = np.asarray(obs_list)
+        return obs_list
+
+    def get_obs(self):
+        # Each object has 7 state: x,y,z,yaw + length, width, height.
+
+        obs_list = self.get_all_obj_info()
+
+        # calculate the dist of each two objects
+        dist = []
+        two_closed_obj_ID_list = []
+        for j in range(self.boxes_num-1):
+            for i in range(j+1, self.boxes_num):
+                dist.append(np.sqrt(np.sum((obs_list[j][:2]-obs_list[i][:2])**2)))
+                two_closed_obj_ID_list.append([j,i])
+
+        # find the objects based on closest distance
+        min_dist_id = np.argmin(dist)
+        two_closed_obj_ID = two_closed_obj_ID_list[min_dist_id]
+
+        # observation is two objects' info
+        obs_list = obs_list[two_closed_obj_ID]
+
+        obs_list = obs_list.reshape(-1)
 
         obs_list = np.asarray(np.concatenate((obs_list,self.action)),dtype=np.float32)
-        return obs_list
+
+        return obs_list # flatten obj state list
 
         # (width, length, image, image_depth, seg_mask) = p.getCameraImage(width=640,
         #                                                                  height=480,
@@ -371,7 +386,6 @@ if __name__ == '__main__':
                  'init_pos_range': [[0.13, 0.17], [-0.03, 0.03], [0.01, 0.02]], 'init_offset_range': [[-0.05, 0.05], [-0.1, 0.1]],
                  'init_ori_range': [[-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4]],
                  'boxes_num': np.random.randint(2,3),
-                 'boxes_num_max': 8,
                  'is_render': True,
                  'box_range': [[0.016, 0.048], [0.016], [0.01, 0.02]],
                  'box_mass': 0.1,
@@ -387,7 +401,6 @@ if __name__ == '__main__':
     env = Arm_env(para_dict=para_dict)
 
     MODE = 0 # RL random or Manual
-
 
     if MODE == 0:
         for i in range(10000):

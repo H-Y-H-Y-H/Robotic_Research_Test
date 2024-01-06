@@ -289,10 +289,10 @@ class Arm_env(gym.Env):
         ee_obj_r = -np.sum(ee_obj**2)
         reward += ee_obj_r
 
-        # # energy penalty:
-        # energy = np.sum((self.action-self.last_action)**2) * 0.01
-        # self.last_action = self.action
-        # reward -= energy
+        # energy penalty:
+        energy = np.sum((self.action-self.last_action)**2) * 0.01
+        self.last_action = self.action
+        reward -= energy
 
         # out-of-boundary penalty:
         if (self.x_low_obs<obs_list[:self.boxes_num,0]).all() and \

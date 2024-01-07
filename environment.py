@@ -80,8 +80,8 @@ class Arm_env(gym.Env):
         self.yaw_manual_id = p.addUserDebugParameter("ee_yaw:", -np.pi/2, np.pi/2, para_dict['reset_ori'][2])
 
         # Define action space (x, y, z, yaw)
-        self.action_space = spaces.Box(low=np.array([-1, -1,  0.005, -np.pi/2]),
-                                       high=np.array([1,1, 0.005, np.pi/2]),
+        self.action_space = spaces.Box(low=np.array([-1, -1,  0.001, -np.pi/2]),
+                                       high=np.array([1,1, 0.003, np.pi/2]),
                                        dtype=np.float32)
 
         # Define observation space (assuming a fixed number of objects for simplicity)
@@ -90,7 +90,7 @@ class Arm_env(gym.Env):
                                             dtype=np.float32)
         self.boxes_index =[]
         self.offline_data = offline_data
-        self.max_steps = 6
+        self.max_steps = 3
         self.init_id = 0
         self.init_scence = init_scence
         self.create_scene()
@@ -170,7 +170,7 @@ class Arm_env(gym.Env):
                 self.boxes_index.append(int(i + 2))
             for _ in range(100):
                 p.stepSimulation()
-            pos_ori_data = self.get_obs()[:-4].reshape(2,-1)
+            pos_ori_data = self.get_all_obj_info()
             info_obj = np.hstack([pos_ori_data[:, :7], self.lwh_list])
 
         else:
@@ -219,6 +219,8 @@ class Arm_env(gym.Env):
             self.create_objects()
             obs_list_flatten = self.get_obs()
             obs_list = obs_list_flatten[:-4].reshape(2, -1)  # last 4 data is the action, 2 objects
+
+            self.real_obs = np.copy(obs_list_flatten)
 
             # whether the objs are in the scence.
             if (self.x_low_obs<obs_list[:self.boxes_num, 0]).all() and \
@@ -326,6 +328,8 @@ class Arm_env(gym.Env):
             Done = True
 
         truncated = False
+
+        obs_list[:-4] = self.real_obs[:-4]
         return obs_list, r, Done, truncated, {}
 
     def get_all_obj_info(self):
@@ -385,7 +389,7 @@ if __name__ == '__main__':
                  'save_img_flag': True,
                  'init_pos_range': [[0.13, 0.17], [-0.03, 0.03], [0.01, 0.02]], 'init_offset_range': [[-0.05, 0.05], [-0.1, 0.1]],
                  'init_ori_range': [[-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4]],
-                 'boxes_num': np.random.randint(2,3),
+                 'boxes_num': 2,
                  'is_render': True,
                  'box_range': [[0.016, 0.048], [0.016], [0.01, 0.02]],
                  'box_mass': 0.1,
@@ -400,7 +404,7 @@ if __name__ == '__main__':
     os.makedirs(para_dict['dataset_path'], exist_ok=True)
     env = Arm_env(para_dict=para_dict)
 
-    MODE = 0 # RL random or Manual
+    MODE = 2 # RL random or Manual
 
     if MODE == 0:
         for i in range(10000):
@@ -413,7 +417,6 @@ if __name__ == '__main__':
                 env.reset()
 
     elif MODE == 1:
-        env.offline_data = False
         n_samples = 40
         count = 0
         while 1:
@@ -438,6 +441,7 @@ if __name__ == '__main__':
                 break
 
     else:
+        env.offline_data = False
         for i in range(10000):
             # control robot arm manually:
 

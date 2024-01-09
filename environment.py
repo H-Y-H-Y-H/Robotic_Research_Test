@@ -88,6 +88,7 @@ class Arm_env(gym.Env):
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf,
                                             shape=(2 * 7 + 4,),  # Position (3) + Orientation (4) for each object
                                             dtype=np.float32)
+        self.traget_end = 0.035
         self.boxes_index =[]
         self.offline_data = offline_data
         self.max_steps = 3
@@ -130,7 +131,7 @@ class Arm_env(gym.Env):
 
     def create_arm(self):
         self.arm_id = p.loadURDF(os.path.join(self.urdf_path, "robot_arm928/robot_arm1_backup.urdf"),
-                                 basePosition=[-0.08, 0, 0.02], useFixedBase=True,
+                                 basePosition=[-0.08, 0, -0.005], useFixedBase=True,
                                  flags=p.URDF_USE_SELF_COLLISION or p.URDF_USE_SELF_COLLISION_INCLUDE_PARENT)
 
         p.changeDynamics(self.arm_id, 7, lateralFriction=self.para_dict['gripper_lateral_friction'],
@@ -204,11 +205,11 @@ class Arm_env(gym.Env):
 
         for i in range(30):
             # traget_end = p.readUserDebugParameter(self.ee_manual_id)
-            traget_end = 0.035 # end effector can close at this joint position.
+             # end effector can close at this joint position.
             p.setJointMotorControl2(self.arm_id, 7, p.POSITION_CONTROL,
-                                    targetPosition=traget_end, force=self.para_dict['gripper_force'])
+                                    targetPosition=self.traget_end, force=10000)
             p.setJointMotorControl2(self.arm_id, 8, p.POSITION_CONTROL,
-                                    targetPosition=traget_end, force=self.para_dict['gripper_force'])
+                                    targetPosition=self.traget_end, force=10000)
             p.stepSimulation()
 
         while 1:
@@ -263,7 +264,10 @@ class Arm_env(gym.Env):
         for motor_index in range(5):
             p.setJointMotorControl2(self.arm_id, motor_index, p.POSITION_CONTROL,
                                     targetPosition=ik_angles0[motor_index], maxVelocity=20)
-
+        p.setJointMotorControl2(self.arm_id, 7, p.POSITION_CONTROL,
+                                targetPosition=self.traget_end, force=10000)
+        p.setJointMotorControl2(self.arm_id, 8, p.POSITION_CONTROL,
+                                targetPosition=self.traget_end, force=10000)
         for _ in range(60):
             p.stepSimulation()
             if self.is_render:

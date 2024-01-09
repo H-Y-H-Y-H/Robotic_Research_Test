@@ -17,6 +17,8 @@ def eval_model(num_episodes = 40):
 
         while not done:
             action, _states = model.predict(obs, deterministic=True)
+            action[2] -= 0.003  # wrap the action space to make the model output 0.002
+
             print(action)
 
             obs, reward, done, _, info = env.step(action)

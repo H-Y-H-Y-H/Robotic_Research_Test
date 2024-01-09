@@ -80,8 +80,8 @@ class Arm_env(gym.Env):
         self.yaw_manual_id = p.addUserDebugParameter("ee_yaw:", -np.pi/2, np.pi/2, para_dict['reset_ori'][2])
 
         # Define action space (x, y, z, yaw)
-        self.action_space = spaces.Box(low=np.array([-1, -1,  0.001, -np.pi/2]),
-                                       high=np.array([1,1, 0.003, np.pi/2]),
+        self.action_space = spaces.Box(low=np.array([-1, -1,  0.005, -np.pi/2]),
+                                       high=np.array([1,1, 0.005, np.pi/2]),
                                        dtype=np.float32)
 
         # Define observation space (assuming a fixed number of objects for simplicity)
@@ -254,7 +254,7 @@ class Arm_env(gym.Env):
         a[0] = (a[0] +1 )/2 * (self.x_high_obs - self.x_low_obs)+self.x_low_obs
         a[1] = (a[1] +1 )/2 * (self.y_high_obs - self.y_low_obs)+self.y_low_obs
         self.action = a
-
+        a[2]-=0.003 # wrap the action space to make the model output 0.002
         target_location = [a[:3],[0,np.pi/2,a[3]]]
 
         ik_angles0 = p.calculateInverseKinematics(self.arm_id, 9, targetPosition=target_location[0],

@@ -216,6 +216,8 @@ class Arm_env(gym.Env):
         return info_obj
 
     def reset(self, seed=None, return_observation=True):
+        self.boxes_num = np.random.randint(2, 8)
+
         home_loc = np.concatenate([self.para_dict['reset_pos'],self.para_dict['reset_ori'][2:]])
         self.act(input_a=home_loc)
         self.last_action = self.action

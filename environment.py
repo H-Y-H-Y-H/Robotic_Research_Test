@@ -152,35 +152,52 @@ class Arm_env(gym.Env):
     def create_objects(self):
 
         if not self.offline_data: # random initialize the env for robot.
-            self.lwh_list = self.get_data_virtual()
-            rdm_ori_roll  = np.random.uniform(self.init_ori_range[0][0], self.init_ori_range[0][1], size=(self.boxes_num, 1))
-            rdm_ori_pitch = np.random.uniform(self.init_ori_range[1][0], self.init_ori_range[1][1], size=(self.boxes_num, 1))
-            rdm_ori_yaw   = np.random.uniform(self.init_ori_range[2][0], self.init_ori_range[2][1], size=(self.boxes_num, 1))
-            objs_ori = np.concatenate((rdm_ori_roll, rdm_ori_pitch, rdm_ori_yaw), axis=1)
+            while 1:
+                self.lwh_list = self.get_data_virtual()
+                rdm_ori_roll  = np.random.uniform(self.init_ori_range[0][0], self.init_ori_range[0][1], size=(self.boxes_num, 1))
+                rdm_ori_pitch = np.random.uniform(self.init_ori_range[1][0], self.init_ori_range[1][1], size=(self.boxes_num, 1))
+                rdm_ori_yaw   = np.random.uniform(self.init_ori_range[2][0], self.init_ori_range[2][1], size=(self.boxes_num, 1))
+                objs_ori = np.concatenate((rdm_ori_roll, rdm_ori_pitch, rdm_ori_yaw), axis=1)
 
-            rdm_pos_x = np.random.uniform(self.init_pos_range[0][0], self.init_pos_range[0][1], size=(self.boxes_num, 1))
-            rdm_pos_y = np.random.uniform(self.init_pos_range[1][0], self.init_pos_range[1][1], size=(self.boxes_num, 1))
-            rdm_pos_z = np.random.uniform(self.init_pos_range[2][0], self.init_pos_range[2][1], size=(self.boxes_num, 1))
-            x_offset = np.random.uniform(self.init_offset_range[0][0], self.init_offset_range[0][1])
-            y_offset = np.random.uniform(self.init_offset_range[1][0], self.init_offset_range[1][1])
-            objs_pos = np.concatenate((rdm_pos_x + x_offset, rdm_pos_y + y_offset, rdm_pos_z), axis=1)
+                rdm_pos_x = np.random.uniform(self.init_pos_range[0][0], self.init_pos_range[0][1], size=(self.boxes_num, 1))
+                rdm_pos_y = np.random.uniform(self.init_pos_range[1][0], self.init_pos_range[1][1], size=(self.boxes_num, 1))
+                rdm_pos_z = np.random.uniform(self.init_pos_range[2][0], self.init_pos_range[2][1], size=(self.boxes_num, 1))
+                x_offset = np.random.uniform(self.init_offset_range[0][0], self.init_offset_range[0][1])
+                y_offset = np.random.uniform(self.init_offset_range[1][0], self.init_offset_range[1][1])
+                objs_pos = np.concatenate((rdm_pos_x + x_offset, rdm_pos_y + y_offset, rdm_pos_z), axis=1)
 
-            for i in range(self.boxes_num):
-                obj_name = f'object_{i}'
-                create_box(obj_name, objs_pos[i], p.getQuaternionFromEuler(objs_ori[i]), size=self.lwh_list[i])
-                self.boxes_index.append(int(i + 2))
-            for _ in range(100):
-                p.stepSimulation()
+                for i in range(self.boxes_num):
+                    obj_name = f'object_{i}'
+                    create_box(obj_name, objs_pos[i], p.getQuaternionFromEuler(objs_ori[i]), size=self.lwh_list[i])
+                    self.boxes_index.append(int(i + 2))
+                for _ in range(100):
+                    p.stepSimulation()
+
+                obs_list = self.get_all_obj_info()
+
+                # whether the objs are in the scence.
+                if (self.x_low_obs<obs_list[:self.boxes_num, 0]).all() and \
+                        (self.x_high_obs > obs_list[:self.boxes_num, 0]).all() and \
+                    (self.y_low_obs<obs_list[:self.boxes_num, 1]).all() and \
+                        (self.y_high_obs >obs_list[:self.boxes_num, 1]).all():
+                    break
+                else:
+                    for k in self.boxes_index: p.removeBody(k)
+                    self.boxes_index = []
+
             pos_ori_data = self.get_all_obj_info()
             info_obj = np.hstack([pos_ori_data[:, :7], self.lwh_list])
+
+
 
         else:
 
             # random_id = random.randint(0,99999)
-            list_path = 'C:/Users/yuhan/Downloads/obj_init_dataset/2obj_%d.csv'%self.init_id
+            # list_path = 'C:/Users/yuhan/Downloads/obj_init_dataset/2obj_%d.csv'%self.init_id
+            # list_path = '/Users/yuhang/Downloads/obj_init_dataset/%dobj_%d.csv'%(self.boxes_num,self.init_id)
+            # info_obj = np.loadtxt(list_path)
 
-            # info_obj = np.loadtxt('urdf/obj_init_info/%dobj_%d.csv'%(self.boxes_num,self.init_id))
-            info_obj = np.loadtxt(list_path)
+            info_obj = np.loadtxt('../obj_init_dataset/%dobj_%d.csv'%(self.boxes_num,self.init_id))
 
             objs_pos, objs_ori, self.lwh_list = info_obj[:,:3],info_obj[:,3:7],info_obj[:,7:10]
             for i in range(self.boxes_num):
@@ -271,7 +288,7 @@ class Arm_env(gym.Env):
         for _ in range(60):
             p.stepSimulation()
             if self.is_render:
-                time.sleep(1 / 480)
+                time.sleep(1 / 120)
 
     def get_r(self):
 
@@ -393,8 +410,8 @@ if __name__ == '__main__':
                  'save_img_flag': True,
                  'init_pos_range': [[0.13, 0.17], [-0.03, 0.03], [0.01, 0.02]], 'init_offset_range': [[-0.05, 0.05], [-0.1, 0.1]],
                  'init_ori_range': [[-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4]],
-                 'boxes_num': 2,
-                 'is_render': True,
+                 'boxes_num': 3,
+                 'is_render': False,
                  'box_range': [[0.016, 0.048], [0.016], [0.01, 0.02]],
                  'box_mass': 0.1,
                  'gripper_force': 3,
@@ -405,10 +422,11 @@ if __name__ == '__main__':
                  'dataset_path': './knolling_box/',
                  'urdf_path': './urdf/',}
 
+    num_scence = 10
     os.makedirs(para_dict['dataset_path'], exist_ok=True)
-    env = Arm_env(para_dict=para_dict)
+    env = Arm_env(para_dict=para_dict,init_scence=num_scence)
 
-    MODE = 2 # RL random or Manual
+    MODE = 1 # RL random or Manual
 
     if MODE == 0:
         for i in range(10000):
@@ -421,8 +439,10 @@ if __name__ == '__main__':
                 env.reset()
 
     elif MODE == 1:
-        n_samples = 40
+        n_samples = 10000
         count = 0
+        env.offline_data = False
+
         while 1:
             # obj initialization:
             for k in env.boxes_index: p.removeBody(k)
@@ -437,8 +457,8 @@ if __name__ == '__main__':
                     dist.append(np.sqrt(np.sum((info_obj[j][:2] - info_obj[i][:2]) ** 2)))
             dist = np.array(dist)
             if (dist < 0.035).any():
-                print('successful scence generated.')
-                np.savetxt('urdf/obj_init_info/%dobj_%d.csv'%(env.boxes_num,env.init_id),info_obj)
+                print(f'successful scence generated {count}.')
+                np.savetxt('../obj_init_dataset/%dobj_%d.csv'%(env.boxes_num,env.init_id),info_obj)
                 env.init_id+=1
                 count+=1
             if count == n_samples:

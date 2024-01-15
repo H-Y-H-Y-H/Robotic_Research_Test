@@ -197,13 +197,13 @@ class Arm_env(gym.Env):
             # list_path = '/Users/yuhang/Downloads/obj_init_dataset/%dobj_%d.csv'%(self.boxes_num,self.init_id)
             # info_obj = np.loadtxt(list_path)
 
-            info_obj = np.loadtxt('urdf/obj_init_info/%dobj_%d.csv'%(self.boxes_num,self.init_id))
+            info_obj = np.loadtxt('../obj_init_dataset/%dobj_%d.csv'%(self.boxes_num,self.init_id))
 
             objs_pos, objs_ori, self.lwh_list = info_obj[:,:3],info_obj[:,3:7],info_obj[:,7:10]
             for i in range(self.boxes_num):
                 obj_name = f'object_{i}'
                 create_box(obj_name, objs_pos[i], objs_ori[i], size=self.lwh_list[i])
-                self.boxes_index.append(int(i + 2))
+                self.boxes_index.append(p.getBodyUniqueId(int(i + 2)))
 
             self.init_id += 1
             if self.init_id == self.init_scence:
@@ -216,6 +216,9 @@ class Arm_env(gym.Env):
         return info_obj
 
     def reset(self, seed=None, return_observation=True):
+        np.random.seed(seed)
+
+
         self.boxes_num = np.random.randint(2, 8)
 
         home_loc = np.concatenate([self.para_dict['reset_pos'],self.para_dict['reset_ori'][2:]])
@@ -238,15 +241,16 @@ class Arm_env(gym.Env):
 
             self.create_objects()
             obs_list_flatten = self.get_obs()
-            obs_list = obs_list_flatten[:-4].reshape(2, -1)  # last 4 data is the action, 2 objects
+
+            obs_list_all = self.get_all_obj_info()
 
             self.real_obs = np.copy(obs_list_flatten)
 
             # whether the objs are in the scence.
-            if (self.x_low_obs<obs_list[:self.boxes_num, 0]).all() and \
-                    (self.x_high_obs > obs_list[:self.boxes_num, 0]).all() and \
-                (self.y_low_obs<obs_list[:self.boxes_num, 1]).all() and \
-                    (self.y_high_obs >obs_list[:self.boxes_num, 1]).all():
+            if (self.x_low_obs<obs_list_all[:self.boxes_num, 0]).all() and \
+                    (self.x_high_obs > obs_list_all[:self.boxes_num, 0]).all() and \
+                (self.y_low_obs<obs_list_all[:self.boxes_num, 1]).all() and \
+                    (self.y_high_obs >obs_list_all[:self.boxes_num, 1]).all():
 
                 # # whether the objects are too closed to each other.
                 # dist = []
@@ -261,8 +265,6 @@ class Arm_env(gym.Env):
 
         self.current_step = 0
 
-        if seed is not None:
-            np.random.seed(seed)
 
         return obs_list_flatten, {}
 
@@ -405,7 +407,7 @@ class Arm_env(gym.Env):
 
 if __name__ == '__main__':
 
-    np.random.seed(0)
+    # np.random.seed(0)
     random.seed(0)
 
     para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, np.pi / 2, 0]),

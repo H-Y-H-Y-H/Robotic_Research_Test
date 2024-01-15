@@ -197,7 +197,7 @@ class Arm_env(gym.Env):
             # list_path = '/Users/yuhang/Downloads/obj_init_dataset/%dobj_%d.csv'%(self.boxes_num,self.init_id)
             # info_obj = np.loadtxt(list_path)
 
-            info_obj = np.loadtxt('../obj_init_dataset/%dobj_%d.csv'%(self.boxes_num,self.init_id))
+            info_obj = np.loadtxt('urdf/obj_init_info/%dobj_%d.csv'%(self.boxes_num,self.init_id))
 
             objs_pos, objs_ori, self.lwh_list = info_obj[:,:3],info_obj[:,3:7],info_obj[:,7:10]
             for i in range(self.boxes_num):
@@ -424,11 +424,13 @@ if __name__ == '__main__':
 
     num_scence = 10
     os.makedirs(para_dict['dataset_path'], exist_ok=True)
-    env = Arm_env(para_dict=para_dict,init_scence=num_scence)
+
 
     MODE = 1 # RL random or Manual
 
     if MODE == 0:
+        env = Arm_env(para_dict=para_dict, init_scence=num_scence)
+
         for i in range(10000):
             # random sample
             action = env.action_space.sample()
@@ -439,9 +441,10 @@ if __name__ == '__main__':
                 env.reset()
 
     elif MODE == 1:
+        env = Arm_env(para_dict=para_dict, init_scence=num_scence, offline_data=False)
+
         n_samples = 10000
         count = 0
-        env.offline_data = False
 
         while 1:
             # obj initialization:
@@ -465,7 +468,8 @@ if __name__ == '__main__':
                 break
 
     else:
-        env.offline_data = False
+        env = Arm_env(para_dict=para_dict, init_scence=num_scence,offline_data = False)
+
         for i in range(10000):
             # control robot arm manually:
 

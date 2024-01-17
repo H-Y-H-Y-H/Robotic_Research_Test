@@ -15,7 +15,7 @@ from stable_baselines3.common.env_checker import check_env
 
 class Arm_env(gym.Env):
 
-    def __init__(self, para_dict, knolling_para=None,offline_data= True,init_scence = 40):
+    def __init__(self, para_dict, knolling_para=None, offline_data= True, init_scene = 40, init_num_obj=0,two_obj_obs=True):
         super(Arm_env, self).__init__()
 
         self.para_dict = para_dict
@@ -32,6 +32,7 @@ class Arm_env(gym.Env):
         self.is_render = para_dict['is_render']
         self.save_img_flag = para_dict['save_img_flag']
 
+        # table  300 x 340
         self.x_low_obs = 0.03
         self.x_high_obs = 0.27
         self.y_low_obs = -0.14
@@ -49,6 +50,9 @@ class Arm_env(gym.Env):
         self.gripper_width = 0.024
         self.gripper_height = 0.034
         self.gripper_interval = 0.01
+
+        self.angle_obj_limit = np.pi/3
+
 
         if self.is_render:
             p.connect(p.GUI, options="--width=1280 --height=720")
@@ -85,19 +89,28 @@ class Arm_env(gym.Env):
                                        dtype=np.float32)
 
         # Define observation space (assuming a fixed number of objects for simplicity)
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf,
-                                            shape=(2 * 7 + 4,),  # Position (3) + Orientation (4) for each object
-                                            dtype=np.float32)
+
+        # observation: [x, y, theta, l, w] * N + ee 4
+        self.two_obj_obs = two_obj_obs
+        if self.two_obj_obs:
+            self.observation_space = spaces.Box(low=-np.inf, high=np.inf,
+                                                shape=(5*2+ 4,),  # Position (3) + Orientation (4) for each object
+                                                dtype=np.float32)
+        else:
+            self.observation_space = spaces.Box(low=-np.inf, high=np.inf,
+                                                shape=(5*2+ 4,),  # Position (3) + Orientation (4) for each object
+                                                dtype=np.float32)
+
         self.traget_end = 0.035
         self.boxes_index =[]
         self.offline_data = offline_data
         self.max_steps = 3
-        self.init_id = 0
-        self.init_scence = init_scence
+        self.offline_scene_id = 0
+        self.max_offline_scene_num = init_scene
         self.create_scene()
         self.create_arm()
-        self.reset()
-        self.init_id = 0
+        self.reset(fix_num_obj=init_num_obj) # fix_num_obj == 0: random 2-8 objects
+
 
 
     def create_scene(self,random_lightness=True,use_texture=True):
@@ -149,7 +162,7 @@ class Arm_env(gym.Env):
         lwh_list = np.concatenate((length_range, width_range, height_range), axis=1)
         return lwh_list
 
-    def create_objects(self):
+    def create_objects(self): # a list of objects states
 
         if not self.offline_data: # random initialize the env for robot.
             while 1:
@@ -169,13 +182,26 @@ class Arm_env(gym.Env):
                 for i in range(self.boxes_num):
                     obj_name = f'object_{i}'
                     create_box(obj_name, objs_pos[i], p.getQuaternionFromEuler(objs_ori[i]), size=self.lwh_list[i])
-                    self.boxes_index.append(int(i + 2))
+                    self.boxes_index.append(p.getBodyUniqueId(int(i + 2)))
                 for _ in range(100):
                     p.stepSimulation()
 
-                obs_list = self.get_all_obj_info()
+                obs_list,state_list = self.get_all_obj_info()
 
-                # whether the objs are in the scence.
+                # whether the objs are flip in the scene: state: x,y,z,r,p,y,l,w,h
+                roll_list = state_list[:,3]
+                pitch_list = state_list[:, 4]
+
+                if (roll_list < -self.angle_obj_limit).any() or \
+                   (roll_list > self.angle_obj_limit).any() or \
+                   (pitch_list < -self.angle_obj_limit).any() or \
+                   (pitch_list > self.angle_obj_limit).any():
+                    for k in self.boxes_index: p.removeBody(k)
+                    self.boxes_index = []
+
+                    continue
+
+                        # whether the objs are in the scene. observation: x,y,y,l,w
                 if (self.x_low_obs<obs_list[:self.boxes_num, 0]).all() and \
                         (self.x_high_obs > obs_list[:self.boxes_num, 0]).all() and \
                     (self.y_low_obs<obs_list[:self.boxes_num, 1]).all() and \
@@ -185,41 +211,30 @@ class Arm_env(gym.Env):
                     for k in self.boxes_index: p.removeBody(k)
                     self.boxes_index = []
 
-            pos_ori_data = self.get_all_obj_info()
-            info_obj = np.hstack([pos_ori_data[:, :7], self.lwh_list])
-
-
+            info_obj, state_list = self.get_all_obj_info()
 
         else:
+            state_list = np.loadtxt('../obj_init_dataset/%dobj_%d.csv' % (self.boxes_num,self.offline_scene_id))
 
-            # random_id = random.randint(0,99999)
-            # list_path = 'C:/Users/yuhan/Downloads/obj_init_dataset/2obj_%d.csv'%self.init_id
-            # list_path = '/Users/yuhang/Downloads/obj_init_dataset/%dobj_%d.csv'%(self.boxes_num,self.init_id)
-            # info_obj = np.loadtxt(list_path)
-
-            info_obj = np.loadtxt('../obj_init_dataset/%dobj_%d.csv'%(self.boxes_num,self.init_id))
-
-            objs_pos, objs_ori, self.lwh_list = info_obj[:,:3],info_obj[:,3:7],info_obj[:,7:10]
+            objs_pos, objs_ori, self.lwh_list = state_list[:,:3],state_list[:,3:6],state_list[:,6:9]
             for i in range(self.boxes_num):
                 obj_name = f'object_{i}'
-                create_box(obj_name, objs_pos[i], objs_ori[i], size=self.lwh_list[i])
+                create_box(obj_name, objs_pos[i], p.getQuaternionFromEuler(objs_ori[i]), size=self.lwh_list[i])
                 self.boxes_index.append(p.getBodyUniqueId(int(i + 2)))
 
-            self.init_id += 1
-            if self.init_id == self.init_scence:
-                self.init_id = 0
+            self.offline_scene_id += 1
+            if self.offline_scene_id == self.max_offline_scene_num:
+                self.offline_scene_id = 0
 
-        p.changeDynamics(self.baseid, -1, lateralFriction=self.para_dict['base_lateral_friction'],
-                         contactDamping=self.para_dict['base_contact_damping'],
-                         contactStiffness=self.para_dict['base_contact_stiffness'])
+        return state_list
 
-        return info_obj
+    def reset(self, seed=None, return_observation=True, fix_num_obj = 0):
 
-    def reset(self, seed=None, return_observation=True):
-        np.random.seed(seed)
-
-
-        self.boxes_num = np.random.randint(2, 8)
+        if fix_num_obj == 0:
+            np.random.seed(seed)
+            self.boxes_num = np.random.randint(2, 8)
+        else:
+            self.boxes_num = fix_num_obj
 
         home_loc = np.concatenate([self.para_dict['reset_pos'],self.para_dict['reset_ori'][2:]])
         self.act(input_a=home_loc)
@@ -242,15 +257,15 @@ class Arm_env(gym.Env):
             self.create_objects()
             obs_list_flatten = self.get_obs()
 
-            obs_list_all = self.get_all_obj_info()
+            obs_list_all, state_list = self.get_all_obj_info()
 
             self.real_obs = np.copy(obs_list_flatten)
 
-            # whether the objs are in the scence.
+            # whether the objs are in the scene.
             if (self.x_low_obs<obs_list_all[:self.boxes_num, 0]).all() and \
                     (self.x_high_obs > obs_list_all[:self.boxes_num, 0]).all() and \
                 (self.y_low_obs<obs_list_all[:self.boxes_num, 1]).all() and \
-                    (self.y_high_obs >obs_list_all[:self.boxes_num, 1]).all():
+                    (self.y_high_obs > obs_list_all[:self.boxes_num, 1]).all():
 
                 # # whether the objects are too closed to each other.
                 # dist = []
@@ -260,11 +275,13 @@ class Arm_env(gym.Env):
                 #         dist.append(np.sqrt(np.sum((obs_list[j][:2] - obs_list[i][:2]) ** 2)))
                 # dist = np.array(dist)
                 # if (dist<0.04).any():
-                #     print('successful scence generated.')
+                #     print('successful scene generated.')
                     break
 
         self.current_step = 0
-
+        p.changeDynamics(self.baseid, -1, lateralFriction=self.para_dict['base_lateral_friction'],
+                         contactDamping=self.para_dict['base_contact_damping'],
+                         contactStiffness=self.para_dict['base_contact_stiffness'])
 
         return obs_list_flatten, {}
 
@@ -296,7 +313,7 @@ class Arm_env(gym.Env):
 
     def get_r(self):
 
-        obs_list = self.get_all_obj_info()
+        obs_list,state_list = self.get_all_obj_info()
 
         # calculate the dist of each two objects
         dist = []
@@ -354,39 +371,56 @@ class Arm_env(gym.Env):
 
         truncated = False
 
+        # use the initial observation for each episode.
         obs_list[:-4] = self.real_obs[:-4]
+
         return obs_list, r, Done, truncated, {}
 
     def get_all_obj_info(self):
-        # Each object has 7 state: x,y,z,yaw + length, width, height.
+        # Each object has 5 state: x,y,yaw + length, width.
         obs_list = []
-        for item in self.boxes_index:
-            loc = p.getBasePositionAndOrientation(item)
-            loc = np.concatenate(loc)
-            obs_list.append(loc)
+        state_list = []
+        for item_id in range(len(self.boxes_index)):
 
-        obs_list = np.asarray(obs_list)
-        return obs_list
+            urdf_id = self.boxes_index[item_id]
+            pos,ori_q = p.getBasePositionAndOrientation(urdf_id)
+            ori_eular = p.getEulerFromQuaternion(ori_q)
+            obs = list(pos[:2]) + [ori_eular[2]] + list(self.lwh_list[item_id][:2])
+            state = list(pos) + list(ori_eular)  + list(self.lwh_list[item_id])
+
+            obs_list.append(obs)
+            state_list.append(state)
+
+        obs_list = sorted(obs_list, key=lambda obs_list: obs_list[0])
+        state_list= sorted(state_list, key=lambda obs_list: obs_list[0])
+        # order: based on the x axis.
+
+        obs_list,state_list = np.asarray(obs_list),np.asarray(state_list)
+
+        return obs_list,state_list
 
     def get_obs(self):
-        # Each object has 7 state: x,y,z,yaw + length, width, height.
+        # Each object has 5 state: x,y,yaw + length, width.
 
-        obs_list = self.get_all_obj_info()
+        obs_list, state_list = self.get_all_obj_info()
 
-        # calculate the dist of each two objects
-        dist = []
-        two_closed_obj_ID_list = []
-        for j in range(self.boxes_num-1):
-            for i in range(j+1, self.boxes_num):
-                dist.append(np.sqrt(np.sum((obs_list[j][:2]-obs_list[i][:2])**2)))
-                two_closed_obj_ID_list.append([j,i])
+        if self.two_obj_obs:
+            # calculate the dist of each two objects
+            dist = []
+            two_closed_obj_ID_list = []
+            for j in range(self.boxes_num-1):
+                for i in range(j+1, self.boxes_num):
+                    dist.append(np.sqrt(np.sum((obs_list[j][:2]-obs_list[i][:2])**2)))
+                    two_closed_obj_ID_list.append([j, i])
 
-        # find the objects based on closest distance
-        min_dist_id = np.argmin(dist)
-        two_closed_obj_ID = two_closed_obj_ID_list[min_dist_id]
+            # find the objects based on closest distance
+            min_dist_id = np.argmin(dist)
+            two_closed_obj_ID = two_closed_obj_ID_list[min_dist_id]
 
-        # observation is two objects' info
-        obs_list = obs_list[two_closed_obj_ID]
+            # observation is two objects' info
+            obs_list = obs_list[two_closed_obj_ID]
+        else:
+            obs_list = np.vstack((obs_list, np.zeros(((8-self.boxes_num),5))))
 
         obs_list = obs_list.reshape(-1)
 
@@ -409,12 +443,12 @@ if __name__ == '__main__':
 
     # np.random.seed(0)
     random.seed(0)
-
+    #center of table: x = 0.12, y = 0
     para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, np.pi / 2, 0]),
                  'save_img_flag': True,
-                 'init_pos_range': [[0.13, 0.17], [-0.03, 0.03], [0.01, 0.02]], 'init_offset_range': [[-0.05, 0.05], [-0.1, 0.1]],
+                 'init_pos_range': [[-0.05, 0.05], [-0.05, 0.05], [0.01, 0.02]], 'init_offset_range': [[0.14, 0.16], [-0.01, 0.01]],
                  'init_ori_range': [[-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4]],
-                 'boxes_num': 3,
+                 'boxes_num': 8,
                  'is_render': False,
                  'box_range': [[0.016, 0.048], [0.016], [0.01, 0.02]],
                  'box_mass': 0.1,
@@ -426,26 +460,26 @@ if __name__ == '__main__':
                  'dataset_path': './knolling_box/',
                  'urdf_path': './urdf/',}
 
-    num_scence = 10
+    num_scene = 10
     os.makedirs(para_dict['dataset_path'], exist_ok=True)
 
 
-    MODE = 1 # RL random or Manual
+    MODE = 0 # RL random or Manual
 
     if MODE == 0:
-        env = Arm_env(para_dict=para_dict, init_scence=num_scence)
+        env = Arm_env(para_dict=para_dict, init_scene=num_scene,two_obj_obs=False)
 
         for i in range(10000):
             # random sample
             action = env.action_space.sample()
             obs,r,done,_,_ = env.step(action)
-            print(r)
+            print("Obs:", obs, "Reward:", r,'Action:',action)
 
             if done:
-                env.reset()
+                env.reset(fix_num_obj=para_dict['boxes_num'])
 
     elif MODE == 1:
-        env = Arm_env(para_dict=para_dict, init_scence=num_scence, offline_data=False)
+        env = Arm_env(para_dict=para_dict, init_scene=num_scene, offline_data=False, init_num_obj=para_dict['boxes_num'])
 
         n_samples = 10000
         count = 0
@@ -464,15 +498,15 @@ if __name__ == '__main__':
                     dist.append(np.sqrt(np.sum((info_obj[j][:2] - info_obj[i][:2]) ** 2)))
             dist = np.array(dist)
             if (dist < 0.035).any():
-                print(f'successful scence generated {count}.')
-                np.savetxt('../obj_init_dataset/%dobj_%d.csv'%(env.boxes_num,env.init_id),info_obj)
-                env.init_id+=1
-                count+=1
+                print(f'successful scene generated {count}.')
+                np.savetxt('../obj_init_dataset/%dobj_%d.csv' % (env.boxes_num, env.offline_scene_id), info_obj)
+                env.offline_scene_id += 1
+                count += 1
             if count == n_samples:
                 break
 
     else:
-        env = Arm_env(para_dict=para_dict, init_scence=num_scence,offline_data = False)
+        env = Arm_env(para_dict=para_dict, init_scene=num_scene, offline_data = False)
 
         for i in range(10000):
             # control robot arm manually:

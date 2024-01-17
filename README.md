@@ -57,3 +57,10 @@ Once you've developed your solution, compress your project into a zip file and s
 We're excited to see your approach to this challenge! Remember, the journey is as important as the destination. We're not just looking for a working solution, but also your problem-solving approach, code organization, and clarity.
 
 Good luck!
+
+
+# training logger:
+    
+1,2,3 only 2 objects. 45 67 89 use pretrained 1,2,3 respectively and 2-8 objects.
+
+10, 11, 12 start from scratch 2-8 objects.

@@ -316,24 +316,24 @@ class Arm_env(gym.Env):
 
     def get_r(self):
 
-        obs_list,state_list = self.get_all_obj_info()
-
-        # calculate the dist of each two objects
-        dist = []
-        for j in range(self.boxes_num-1):
-            for i in range(j+1, self.boxes_num):
-                dist.append(np.sqrt(np.sum((obs_list[j][:2]-obs_list[i][:2])**2)))
-
-        dist_mean = np.mean(dist)
-        if dist_mean>0.05:
-            reward = 0.1
-        else:
-            reward = dist_mean
+        obs_list, state_list = self.get_all_obj_info()
+        reward = 100
+        # # calculate the dist of each two objects
+        # dist = []
+        # for j in range(self.boxes_num-1):
+        #     for i in range(j+1, self.boxes_num):
+        #         dist.append(np.sqrt(np.sum((obs_list[j][:2]-obs_list[i][:2])**2)))
+        #
+        # dist_mean = np.mean(dist)
+        # if dist_mean > 0.05:
+        #     reward = 0.1 * 10
+        # else:
+        #     reward = dist_mean
 
         # Penalty: Arm ee to the center of the pile.
         center_obj_loc = np.mean(obs_list[:self.boxes_num],axis=0)[:3]
         ee_obj = center_obj_loc - np.asarray(p.getLinkState(self.arm_id, 6)[0])
-        ee_obj_r = -np.sum(ee_obj**2)
+        ee_obj_r = -np.sum(ee_obj**2)*1000
         reward += ee_obj_r
 
         # # energy penalty:
@@ -395,7 +395,7 @@ class Arm_env(gym.Env):
             state_list.append(state)
 
         obs_list = sorted(obs_list, key=lambda obs_list: obs_list[0])
-        state_list= sorted(state_list, key=lambda obs_list: obs_list[0])
+        state_list = sorted(state_list, key=lambda obs_list: obs_list[0])
         # order: based on the x axis.
 
         obs_list,state_list = np.asarray(obs_list),np.asarray(state_list)

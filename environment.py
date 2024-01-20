@@ -31,6 +31,7 @@ class Arm_env(gym.Env):
         self.pybullet_path = pd.getDataPath()
         self.is_render = para_dict['is_render']
         self.save_img_flag = para_dict['save_img_flag']
+        self.max_num = para_dict['boxes_num_max']
 
         # table  300 x 340
         self.x_low_obs = 0.03
@@ -84,8 +85,8 @@ class Arm_env(gym.Env):
         self.yaw_manual_id = p.addUserDebugParameter("ee_yaw:", -np.pi/2, np.pi/2, para_dict['reset_ori'][2])
 
         # Define action space (x, y, z, yaw)
-        self.action_space = spaces.Box(low=np.array([-1, -1,  0.005, -np.pi/2]),
-                                       high=np.array([1,1, 0.005, np.pi/2]),
+        self.action_space = spaces.Box(low=np.array([-1, -1,  0.001, -np.pi/2]),
+                                       high=np.array([1,1, 0.002, np.pi/2]),
                                        dtype=np.float32)
 
         # Define observation space (assuming a fixed number of objects for simplicity)
@@ -98,7 +99,7 @@ class Arm_env(gym.Env):
                                                 dtype=np.float32)
         else:
             self.observation_space = spaces.Box(low=-np.inf, high=np.inf,
-                                                shape=(5*2+ 4,),  # Position (3) + Orientation (4) for each object
+                                                shape=(5*self.max_num+ 4,),  # Position (3) + Orientation (4) for each object
                                                 dtype=np.float32)
 
         self.traget_end = 0.035
@@ -232,7 +233,7 @@ class Arm_env(gym.Env):
 
         if fix_num_obj == 0:
             np.random.seed(seed)
-            self.boxes_num = np.random.randint(2, 8)
+            self.boxes_num = np.random.randint(2, self.para_dict['boxes_num_max']+1)
         else:
             self.boxes_num = fix_num_obj
 
@@ -292,7 +293,9 @@ class Arm_env(gym.Env):
         a[0] = (a[0] +1 )/2 * (self.x_high_obs - self.x_low_obs)+self.x_low_obs
         a[1] = (a[1] +1 )/2 * (self.y_high_obs - self.y_low_obs)+self.y_low_obs
         self.action = a
-        a[2]-=0.003 # wrap the action space to make the model output 0.002
+
+        # a[2]-=0.003 # wrap the action space to make the model output 0.002
+
         target_location = [a[:3],[0,np.pi/2,a[3]]]
 
         ik_angles0 = p.calculateInverseKinematics(self.arm_id, 9, targetPosition=target_location[0],
@@ -333,10 +336,10 @@ class Arm_env(gym.Env):
         ee_obj_r = -np.sum(ee_obj**2)
         reward += ee_obj_r
 
-        # energy penalty:
-        energy = np.sum((self.action-self.last_action)**2) * 0.01
-        self.last_action = self.action
-        reward -= energy
+        # # energy penalty:
+        # energy = np.sum((self.action-self.last_action)**2) * 0.01
+        # self.last_action = self.action
+        # reward -= energy
 
         # out-of-boundary penalty:
         if (self.x_low_obs<obs_list[:self.boxes_num,0]).all() and \
@@ -420,7 +423,7 @@ class Arm_env(gym.Env):
             # observation is two objects' info
             obs_list = obs_list[two_closed_obj_ID]
         else:
-            obs_list = np.vstack((obs_list, np.zeros(((8-self.boxes_num),5))))
+            obs_list = np.vstack((obs_list, np.zeros(((self.max_num-self.boxes_num),5))))
 
         obs_list = obs_list.reshape(-1)
 
@@ -448,7 +451,8 @@ if __name__ == '__main__':
                  'save_img_flag': True,
                  'init_pos_range': [[-0.05, 0.05], [-0.05, 0.05], [0.01, 0.02]], 'init_offset_range': [[0.14, 0.16], [-0.01, 0.01]],
                  'init_ori_range': [[-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4]],
-                 'boxes_num': 8,
+                 'boxes_num': 5,
+                 'boxes_num_max':5,
                  'is_render': False,
                  'box_range': [[0.016, 0.048], [0.016], [0.01, 0.02]],
                  'box_mass': 0.1,
@@ -472,8 +476,8 @@ if __name__ == '__main__':
         for i in range(10000):
             # random sample
             action = env.action_space.sample()
-            obs,r,done,_,_ = env.step(action)
-            print("Obs:", obs, "Reward:", r,'Action:',action)
+            obs, r, done, _, _ = env.step(action)
+            print("Obs:", obs, "Reward:", r, 'Action:', action)
 
             if done:
                 env.reset(fix_num_obj=para_dict['boxes_num'])

@@ -64,3 +64,7 @@ Good luck!
 1,2,3 only 2 objects. 45 67 89 use pretrained 1,2,3 respectively and 2-8 objects.
 
 10, 11, 12 start from scratch 2-8 objects.
+
+
+6, 7,8 SAC
+9,10 PPO max 5 obj

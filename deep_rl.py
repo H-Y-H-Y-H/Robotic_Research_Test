@@ -18,10 +18,11 @@ def eval_model(num_episodes = 40):
         while not done:
             action, _states = model.predict(obs, deterministic=True)
             # action[2] -= 0.003  # wrap the action space to make the model output 0.002
-            print(obs)
-            # print(action)
+            print(action)
 
             obs, reward, done, _, info = env.step(action)
+            print(reward)
+
             total_reward += reward
         print(total_reward)
         total_rewards.append(total_reward)
@@ -48,9 +49,10 @@ para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, 
              'dataset_path': './knolling_box/',
              'urdf_path': './urdf/', }
 
-train_RL = True
+train_RL = False
 
-loggerID= 2
+
+loggerID= 14
 RLmode = 'PPO' # "PPO"
 num_scence = 10000
 Two_obs_Flag = False
@@ -67,15 +69,19 @@ if train_RL:
 
     num_epoch = 100000
 
-    # # start from scratch
-    if RLmode == 'SAC':
-        model = SAC("MlpPolicy", env, verbose=1)
-    elif RLmode == 'PPO':
-        model = PPO("MlpPolicy", env, verbose=1)
+    # # # start from scratch
+    # if RLmode == 'SAC':
+    #     model = SAC("MlpPolicy", env, verbose=1)
+    # elif RLmode == 'PPO':
+    #     model = PPO("MlpPolicy", env, verbose=1)
 
-    # # pre-trained model:
-    # model = SAC.load(f"logger/SAC_{para_dict['boxes_num_max']}objobs/log{7}/ppo_model_best.zip")
+    # # # # pre-trained model:
+    # model = SAC.load(f"logger/SAC_{para_dict['boxes_num_max']}objobs/log{15}/ppo_model_best.zip")
     # model.set_env(env)
+
+    # # # pre-trained model:
+    model = PPO.load(f"logger/PPO_{para_dict['boxes_num_max']}objobs/log{14}/ppo_model_best.zip")
+    model.set_env(env)
 
     # Configure wandb with hyperparameters
     config = {
@@ -111,7 +117,7 @@ if train_RL:
                    'epoch:':epoch})
 
 else:
-    run_id = '7'
+    run_id = '15'
     api = wandb.Api()
     proj_name = 'RL_sep3'
     runs = api.runs("robotics/%s"%proj_name)

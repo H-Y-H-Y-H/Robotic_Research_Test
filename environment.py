@@ -53,7 +53,7 @@ class Arm_env(gym.Env):
         self.gripper_interval = 0.01
 
         self.angle_obj_limit = np.pi/3
-
+        self.debug_point = 0
 
         if self.is_render:
             p.connect(p.GUI, options="--width=1280 --height=720")
@@ -144,7 +144,7 @@ class Arm_env(gym.Env):
 
 
     def create_arm(self):
-        self.arm_id = p.loadURDF(os.path.join(self.urdf_path, "robot_arm928/robot_arm1_backup.urdf"),
+        self.arm_id = p.loadURDF(os.path.join(self.urdf_path, "robot_arm928/robot_arm_fixed.urdf"),
                                  basePosition=[-0.08, 0, -0.005], useFixedBase=True,
                                  flags=p.URDF_USE_SELF_COLLISION or p.URDF_USE_SELF_COLLISION_INCLUDE_PARENT)
 
@@ -317,29 +317,37 @@ class Arm_env(gym.Env):
     def get_r(self):
 
         obs_list, state_list = self.get_all_obj_info()
-        reward = 100
+        # reward = 100
         # # calculate the dist of each two objects
-        # dist = []
-        # for j in range(self.boxes_num-1):
-        #     for i in range(j+1, self.boxes_num):
-        #         dist.append(np.sqrt(np.sum((obs_list[j][:2]-obs_list[i][:2])**2)))
-        #
-        # dist_mean = np.mean(dist)
-        # if dist_mean > 0.05:
-        #     reward = 0.1 * 10
-        # else:
-        #     reward = dist_mean
+        dist = []
+        for j in range(self.boxes_num-1):
+            for i in range(j+1, self.boxes_num):
+                dist.append(np.sqrt(np.sum((obs_list[j][:2]-obs_list[i][:2])**2)))
+
+        dist_mean = np.mean(dist)
+        if dist_mean > 0.05:
+            reward = 0.1 * 1000
+        else:
+            # reward = dist_mean*10 #11, 13
+            reward = dist_mean*100 # 10, 12,14,15
+
 
         # Penalty: Arm ee to the center of the pile.
         center_obj_loc = np.mean(obs_list[:self.boxes_num],axis=0)[:3]
-        ee_obj = center_obj_loc - np.asarray(p.getLinkState(self.arm_id, 6)[0])
-        ee_obj_r = -np.sum(ee_obj**2)*1000
+
+        # p.removeUserDebugItem(self.debug_point)  # update points every step
+        # self.debug_point = p.addUserDebugPoints([list(center_obj_loc[:2])+[0.001]], [[1,0,0]], pointSize=10)
+        # self.debug_point = p.addUserDebugPoints([list(p.getLinkState(self.arm_id, 6)[0][:2])+[0.001]], [[0,1,0]], pointSize=10)
+
+        ee_obj = center_obj_loc[:2] - np.asarray(p.getLinkState(self.arm_id, 6)[0][:2])
+
+        ee_obj_r = -np.sum(ee_obj**2)*5000
         reward += ee_obj_r
 
-        # # energy penalty:
-        # energy = np.sum((self.action-self.last_action)**2) * 0.01
-        # self.last_action = self.action
-        # reward -= energy
+        # energy penalty: #14,15
+        energy = np.sum((self.action-self.last_action)**2) * 0.01 *100
+        self.last_action = self.action
+        reward -= energy
 
         # out-of-boundary penalty:
         if (self.x_low_obs<obs_list[:self.boxes_num,0]).all() and \
@@ -453,7 +461,7 @@ if __name__ == '__main__':
                  'init_ori_range': [[-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4], [-np.pi / 4, np.pi / 4]],
                  'boxes_num': 5,
                  'boxes_num_max':5,
-                 'is_render': False,
+                 'is_render': True,
                  'box_range': [[0.016, 0.048], [0.016], [0.01, 0.02]],
                  'box_mass': 0.1,
                  'gripper_force': 3,

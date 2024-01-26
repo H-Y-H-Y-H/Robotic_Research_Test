@@ -61,7 +61,7 @@ num_scence = 200
 Two_obs_Flag = False
 log_path = f"logger/{RLmode}_{max_num_obj}objobs/log{loggerID}/"
 
-env = Arm_env(para_dict=para_dict, init_scene=num_scence, two_obj_obs=Two_obs_Flag)
+env = Arm_env(para_dict=para_dict, init_scene=num_scence,offline_data=False, two_obj_obs=Two_obs_Flag)
 
 model = SAC.load(log_path + "/ppo_model_best.zip")
 

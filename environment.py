@@ -338,10 +338,8 @@ class Arm_env(gym.Env):
         # p.removeUserDebugItem(self.debug_point)  # update points every step
         # self.debug_point = p.addUserDebugPoints([list(center_obj_loc[:2])+[0.001]], [[1,0,0]], pointSize=10)
         # self.debug_point = p.addUserDebugPoints([list(p.getLinkState(self.arm_id, 6)[0][:2])+[0.001]], [[0,1,0]], pointSize=10)
-
         ee_obj = center_obj_loc[:2] - np.asarray(p.getLinkState(self.arm_id, 6)[0][:2])
-
-        ee_obj_r = -np.sum(ee_obj**2)*5000
+        ee_obj_r = -np.sum(ee_obj**2)*500
         reward += ee_obj_r
 
         # energy penalty: #14,15

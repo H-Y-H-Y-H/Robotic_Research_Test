@@ -52,8 +52,8 @@ para_dict = {'reset_pos': np.array([-0.9, 0, 0.005]), 'reset_ori': np.array([0, 
 train_RL = False
 
 
-loggerID= 14
-RLmode = 'PPO' # "PPO"
+loggerID= 20
+RLmode = 'SAC' # "PPO"
 num_scence = 10000
 Two_obs_Flag = False
 
@@ -75,13 +75,13 @@ if train_RL:
     # elif RLmode == 'PPO':
     #     model = PPO("MlpPolicy", env, verbose=1)
 
-    # # # # pre-trained model:
-    # model = SAC.load(f"logger/SAC_{para_dict['boxes_num_max']}objobs/log{15}/ppo_model_best.zip")
-    # model.set_env(env)
-
     # # # pre-trained model:
-    model = PPO.load(f"logger/PPO_{para_dict['boxes_num_max']}objobs/log{14}/ppo_model_best.zip")
+    model = SAC.load(f"logger/SAC_{para_dict['boxes_num_max']}objobs/log{16}/ppo_model_best.zip")
     model.set_env(env)
+
+    # # # # pre-trained model:
+    # model = PPO.load(f"logger/PPO_{para_dict['boxes_num_max']}objobs/log{14}/ppo_model_best.zip")
+    # model.set_env(env)
 
     # Configure wandb with hyperparameters
     config = {
@@ -117,7 +117,7 @@ if train_RL:
                    'epoch:':epoch})
 
 else:
-    run_id = '15'
+    run_id = '16'
     api = wandb.Api()
     proj_name = 'RL_sep3'
     runs = api.runs("robotics/%s"%proj_name)
